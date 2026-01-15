@@ -322,6 +322,7 @@
         <span class="name">Prompt Launcher</span>
         <span class="meta">Hotkey: {config.hotkey}</span>
         <span class="meta">Folder: {config.prompts_dir || "Not set"}</span>
+        <span class="meta">Favorites: {config.favorites.length}</span>
       </div>
       <div class="actions">
         <button class="ghost" type="button" onclick={chooseFolder}>
@@ -330,8 +331,8 @@
         <button class="ghost" type="button" onclick={openFolder}>
           Open Folder
         </button>
-        <button class="ghost" type="button" onclick={toggleFavoritesFilter}>
-          {showFavorites ? "All prompts" : "Favorites"}
+        <button class="ghost" class:active={showFavorites} type="button" onclick={toggleFavoritesFilter}>
+          {showFavorites ? "All prompts" : `Favorites (${config.favorites.length})`}
         </button>
         <label class="toggle">
           <input type="checkbox" checked={config.auto_paste} onchange={toggleAutoPaste} />
@@ -589,6 +590,12 @@
   background: transparent;
   border: 1px solid rgba(87, 107, 95, 0.4);
   color: #375046;
+}
+
+.ghost.active {
+  background: rgba(221, 243, 232, 0.75);
+  border-color: rgba(61, 108, 90, 0.6);
+  color: #2d6a57;
 }
 
 .toggle {

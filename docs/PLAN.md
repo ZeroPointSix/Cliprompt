@@ -60,3 +60,8 @@
 
 - [x] Add a keyboard shortcut to toggle favorites for the active prompt.
 - [x] Run `npm run check` after code updates.
+
+## Iteration 12 (Favorites badge)
+
+- [x] Show favorites count and active filter state in the header.
+- [x] Run `npm run check` after code updates.

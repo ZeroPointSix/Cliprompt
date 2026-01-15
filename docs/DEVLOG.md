@@ -17,3 +17,4 @@
 - Added a compact settings drawer with hotkey guidance and status.
 - Added favorites toggles with a favorites-only filter.
 - Added a keyboard shortcut to favorite the active prompt.
+- Added a favorites count badge and active filter state.
