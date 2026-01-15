@@ -90,3 +90,8 @@
 
 - [x] Track recently used prompts and show a recent section.
 - [x] Run `npm run check` after code updates.
+
+## Iteration 18 (Recent controls)
+
+- [x] Add recent filter and enable/clear controls.
+- [x] Run `npm run check` after code updates.

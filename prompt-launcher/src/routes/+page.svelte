@@ -24,6 +24,7 @@
     auto_start: boolean;
     favorites: string[];
     recent_ids: string[];
+    recent_enabled: boolean;
   };
 
   const appWindow = getCurrentWindow();
@@ -37,7 +38,8 @@
     hotkey: "Alt+Space",
     auto_start: false,
     favorites: [],
-    recent_ids: []
+    recent_ids: [],
+    recent_enabled: true
   });
   let selectedIndex = $state<number>(0);
   let status = $state<string>("");
@@ -46,6 +48,7 @@
   let settingsError = $state<string>("");
   let showSettings = $state<boolean>(false);
   let showFavorites = $state<boolean>(false);
+  let showRecent = $state<boolean>(false);
   let currentHotkey = "";
 
   let filtered = $state<PromptEntry[]>([]);
@@ -229,13 +232,45 @@
 
   function toggleFavoritesFilter() {
     showFavorites = !showFavorites;
+    if (showFavorites) {
+      showRecent = false;
+    }
+    selectedIndex = 0;
+    void refreshResults();
+  }
+
+  function toggleRecentFilter() {
+    showRecent = !showRecent;
+    if (showRecent) {
+      showFavorites = false;
+    }
     selectedIndex = 0;
     void refreshResults();
   }
 
   async function markRecent(prompt: PromptEntry) {
+    if (!config.recent_enabled) {
+      return;
+    }
     const recentIds = await invoke<string[]>("push_recent", { id: prompt.id });
     config = { ...config, recent_ids: recentIds ?? [] };
+  }
+
+  async function toggleRecentEnabled() {
+    const nextValue = !config.recent_enabled;
+    config = { ...config, recent_enabled: nextValue };
+    await invoke("set_recent_enabled", { recentEnabled: nextValue });
+    if (!nextValue) {
+      const recentIds = await invoke<string[]>("clear_recent");
+      config = { ...config, recent_ids: recentIds ?? [], recent_enabled: nextValue };
+    }
+    void refreshResults();
+  }
+
+  async function clearRecent() {
+    const recentIds = await invoke<string[]>("clear_recent");
+    config = { ...config, recent_ids: recentIds ?? [] };
+    void refreshResults();
   }
 
   async function usePrompt(prompt: PromptEntry | null | undefined) {
@@ -390,6 +425,9 @@
         <button class="ghost" class:active={showFavorites} type="button" onclick={toggleFavoritesFilter}>
           {showFavorites ? "All prompts" : `Favorites (${config.favorites.length})`}
         </button>
+        <button class="ghost" class:active={showRecent} type="button" onclick={toggleRecentFilter}>
+          {showRecent ? "All prompts" : `Recent (${config.recent_ids.length})`}
+        </button>
         <label class="toggle">
           <input type="checkbox" checked={config.auto_paste} onchange={toggleAutoPaste} />
           <span>Auto paste</span>
@@ -397,6 +435,10 @@
         <label class="toggle">
           <input type="checkbox" checked={config.auto_start} onchange={toggleAutoStart} />
           <span>Auto start</span>
+        </label>
+        <label class="toggle">
+          <input type="checkbox" checked={config.recent_enabled} onchange={toggleRecentEnabled} />
+          <span>Recent</span>
         </label>
       </div>
     </header>
@@ -421,7 +463,7 @@
             <span>No matches yet</span>
             <span class="hint">Try a tag like #sql</span>
           </div>
-        {:else if !showFavorites && (recentList.length > 0 || favoritesList.length > 0)}
+        {:else if !showFavorites && !showRecent && (recentList.length > 0 || favoritesList.length > 0)}
           {#if recentList.length > 0}
             <div class="section-label">Recent</div>
             {#each recentList as item (item.prompt.id)}
@@ -700,6 +742,13 @@
         <div class="settings-row">
           <span class="settings-label">Favorites</span>
           <span>Toggle with Ctrl+Shift+F</span>
+        </div>
+        <div class="settings-row">
+          <span class="settings-label">Recent</span>
+          <span>Use the Recent toggle to enable/disable tracking</span>
+          <button class="ghost tiny" type="button" onclick={clearRecent}>
+            Clear
+          </button>
         </div>
         {#if hotkeyError}
           <div class="settings-row error">{hotkeyError}</div>
@@ -1051,6 +1100,11 @@
 .settings-row.error {
   color: #a34f3b;
   font-weight: 600;
+}
+
+.tiny {
+  padding: 4px 10px;
+  font-size: 11px;
 }
 
 .hotkey {

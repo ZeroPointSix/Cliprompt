@@ -24,6 +24,7 @@ Minimal Windows prompt manager that stays local, is file driven, and pastes into
 - Filter mode chip in the header
 - Copy-path action in the preview panel
 - Recent section pinned at the top of the list
+- Recent filter toggle and clear action
 
 ## Quickstart
 

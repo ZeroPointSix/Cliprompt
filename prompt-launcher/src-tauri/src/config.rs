@@ -14,6 +14,8 @@ pub struct AppConfig {
     pub favorites: Vec<String>,
     #[serde(default)]
     pub recent_ids: Vec<String>,
+    #[serde(default)]
+    pub recent_enabled: bool,
 }
 
 impl Default for AppConfig {
@@ -25,6 +27,7 @@ impl Default for AppConfig {
             auto_start: false,
             favorites: Vec::new(),
             recent_ids: Vec::new(),
+            recent_enabled: true,
         }
     }
 }

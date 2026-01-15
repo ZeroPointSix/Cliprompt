@@ -159,6 +159,28 @@ fn push_recent(
 }
 
 #[tauri::command]
+fn set_recent_enabled(
+    app: AppHandle,
+    state: State<Arc<AppState>>,
+    recent_enabled: bool,
+) -> Result<(), String> {
+    let mut config = state.config.lock().unwrap();
+    config.recent_enabled = recent_enabled;
+    save(&app, &config)
+}
+
+#[tauri::command]
+fn clear_recent(
+    app: AppHandle,
+    state: State<Arc<AppState>>,
+) -> Result<Vec<String>, String> {
+    let mut config = state.config.lock().unwrap();
+    config.recent_ids.clear();
+    save(&app, &config)?;
+    Ok(config.recent_ids.clone())
+}
+
+#[tauri::command]
 fn capture_active_window(state: State<Arc<AppState>>) -> Result<(), String> {
     store_active_window(state.inner())
 }
@@ -385,6 +407,8 @@ pub fn run() {
             set_auto_start,
             toggle_favorite,
             push_recent,
+            set_recent_enabled,
+            clear_recent,
             capture_active_window,
             focus_last_window
         ])
