@@ -180,6 +180,13 @@
     void refreshResults();
   }
 
+  function toggleSelectedFavorite() {
+    if (!activePrompt) {
+      return;
+    }
+    void toggleFavorite(activePrompt);
+  }
+
   function isFavorite(prompt: PromptEntry) {
     return config.favorites.includes(prompt.id);
   }
@@ -244,6 +251,15 @@
   }
 
   function onSearchKeydown(event: KeyboardEvent) {
+    if (
+      event.ctrlKey &&
+      event.shiftKey &&
+      event.key.toLowerCase() === "f"
+    ) {
+      event.preventDefault();
+      toggleSelectedFavorite();
+      return;
+    }
     if (filtered.length === 0) {
       if (event.key === "Escape") {
         event.preventDefault();
@@ -444,7 +460,7 @@
         {:else if status}
           <span>{status}</span>
         {:else}
-          <span>Enter to paste, right click to open</span>
+          <span>Enter to paste, right click to open, Ctrl+Shift+F to favorite</span>
         {/if}
       </div>
     </footer>
@@ -463,6 +479,10 @@
         <div class="settings-row">
           <span class="settings-label">Auto start</span>
           <span>{config.auto_start ? "Enabled" : "Disabled"}</span>
+        </div>
+        <div class="settings-row">
+          <span class="settings-label">Favorites</span>
+          <span>Toggle with Ctrl+Shift+F</span>
         </div>
         {#if hotkeyError}
           <div class="settings-row error">{hotkeyError}</div>

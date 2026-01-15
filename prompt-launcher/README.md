@@ -17,6 +17,7 @@ Minimal Windows prompt manager that stays local, is file driven, and pastes into
 - Copy-title action for snippet titles
 - Compact settings drawer with hotkey guidance
 - Favorites toggle with quick filter
+- Favorite toggle shortcut: Ctrl+Shift+F
 
 ## Quickstart
 

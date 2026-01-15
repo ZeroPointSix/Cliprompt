@@ -55,3 +55,8 @@
 
 - [x] Add a favorites toggle per prompt and a favorites-only filter.
 - [x] Run `npm run check` after code updates.
+
+## Iteration 11 (Favorites shortcut)
+
+- [x] Add a keyboard shortcut to toggle favorites for the active prompt.
+- [x] Run `npm run check` after code updates.
