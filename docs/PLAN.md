@@ -100,3 +100,8 @@
 
 - [x] Show matched snippets in list rows while searching.
 - [x] Run `npm run check` after code updates.
+
+## Iteration 20 (Recent shortcut)
+
+- [x] Add a shortcut to clear recent history.
+- [x] Run `npm run check` after code updates.

@@ -25,3 +25,4 @@
 - Added a recent section and persisted recently used prompts.
 - Added recent filter, enable toggle, and clear action.
 - Added matched snippets in list rows when searching.
+- Added a Ctrl+Shift+R shortcut to clear recent history.
