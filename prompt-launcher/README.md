@@ -9,6 +9,7 @@ Minimal Windows prompt manager that stays local, is file driven, and pastes into
 - Auto paste with optional copy-only mode
 - Folder watcher for hot reload
 - Right click to open source file
+- Quick open for the prompts folder
 
 ## Quickstart
 
@@ -24,6 +25,7 @@ npm run tauri dev
 - Each prompt is a single file.
 - Title = filename (no extension).
 - Tags can be encoded in filenames with `#tag` or `[Tag]`.
+- Search matches filename, tags, preview, and full body.
 
 ## Defaults
 

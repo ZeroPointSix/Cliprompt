@@ -177,6 +177,13 @@
     await openPath(prompt.path);
   }
 
+  async function openFolder() {
+    if (!config.prompts_dir) {
+      return;
+    }
+    await openPath(config.prompts_dir);
+  }
+
   function onSearchInput(event: Event) {
     const target = event.target as HTMLInputElement | null;
     query = target?.value ?? "";
@@ -221,7 +228,8 @@
   }
 
   function buildSearchText(prompt: PromptEntry) {
-    return `${prompt.title} ${prompt.preview} ${prompt.tags?.join(" ") ?? ""}`.toLowerCase();
+    return `${prompt.title} ${prompt.preview} ${prompt.body} ${prompt.tags?.join(" ") ?? ""}`
+      .toLowerCase();
   }
 
   function filterPrompts(list: PromptEntry[], rawQuery: string, limit: number) {
@@ -283,10 +291,14 @@
       <div class="title">
         <span class="name">Prompt Launcher</span>
         <span class="meta">Hotkey: {config.hotkey}</span>
+        <span class="meta">Folder: {config.prompts_dir || "Not set"}</span>
       </div>
       <div class="actions">
         <button class="ghost" type="button" onclick={chooseFolder}>
           Change Folder
+        </button>
+        <button class="ghost" type="button" onclick={openFolder}>
+          Open Folder
         </button>
         <label class="toggle">
           <input type="checkbox" checked={config.auto_paste} onchange={toggleAutoPaste} />

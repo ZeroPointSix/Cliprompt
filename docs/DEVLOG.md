@@ -5,3 +5,5 @@
 - Scaffolded Tauri v2 + SvelteKit project in `prompt-launcher`.
 - Implemented prompt indexing, file watching, and focus/paste flow in Rust.
 - Built the MVP UI with search, preview, folder picker, and hotkey settings.
+- Expanded search to include prompt bodies and added quick open for the prompts folder.
+- Added `docs/PLAN.md` to track iteration scope.
