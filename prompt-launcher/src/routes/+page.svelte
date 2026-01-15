@@ -1,0 +1,683 @@
+<script>
+  import { onDestroy, onMount, tick } from "svelte";
+  import { invoke } from "@tauri-apps/api/core";
+  import { listen } from "@tauri-apps/api/event";
+  import { getCurrentWindow } from "@tauri-apps/api/window";
+  import { open as openDialog } from "@tauri-apps/plugin-dialog";
+  import { register, unregister } from "@tauri-apps/plugin-global-shortcut";
+  import { writeText } from "@tauri-apps/plugin-clipboard-manager";
+  import { open as openPath } from "@tauri-apps/plugin-opener";
+
+  const appWindow = getCurrentWindow();
+  const maxResults = 8;
+
+  let searchInput;
+  let query = $state("");
+  let prompts = $state([]);
+  let config = $state({
+    prompts_dir: "",
+    auto_paste: true,
+    hotkey: "Alt+Space"
+  });
+  let selectedIndex = $state(0);
+  let status = $state("");
+  let hotkeyDraft = $state("");
+  let hotkeyError = $state("");
+  let currentHotkey = "";
+
+  let filtered = $derived(() => filterPrompts(prompts, query, maxResults));
+  let activePrompt = $derived(() => filtered[selectedIndex] ?? null);
+
+  let unlistenPrompts;
+  let unlistenFocus;
+
+  onMount(async () => {
+    config = await invoke("get_config");
+    hotkeyDraft = config.hotkey;
+    prompts = normalizePrompts(await invoke("list_prompts"));
+    await registerHotkey(config.hotkey);
+
+    unlistenPrompts = await listen("prompts-updated", (event) => {
+      prompts = normalizePrompts(event.payload ?? []);
+      selectedIndex = 0;
+    });
+
+    unlistenFocus = await appWindow.onFocusChanged(({ payload }) => {
+      if (!payload) {
+        appWindow.hide();
+      } else {
+        focusSearch();
+      }
+    });
+  });
+
+  onDestroy(async () => {
+    if (unlistenPrompts) {
+      unlistenPrompts();
+    }
+    if (unlistenFocus) {
+      unlistenFocus();
+    }
+    if (currentHotkey) {
+      await unregister(currentHotkey).catch(() => {});
+    }
+  });
+
+  async function registerHotkey(hotkey) {
+    hotkeyError = "";
+    if (currentHotkey) {
+      await unregister(currentHotkey).catch(() => {});
+    }
+    try {
+      await register(hotkey, toggleWindow);
+      currentHotkey = hotkey;
+    } catch (error) {
+      hotkeyError = `Hotkey failed: ${error}`;
+    }
+  }
+
+  async function toggleWindow() {
+    const visible = await appWindow.isVisible();
+    if (visible) {
+      await appWindow.hide();
+      return;
+    }
+    await invoke("capture_active_window").catch(() => {});
+    await appWindow.show();
+    await appWindow.setFocus();
+    await tick();
+    focusSearch();
+  }
+
+  function focusSearch() {
+    if (searchInput) {
+      searchInput.focus();
+      searchInput.select();
+    }
+  }
+
+  async function chooseFolder() {
+    const result = await openDialog({
+      directory: true,
+      multiple: false,
+      title: "Select prompts folder"
+    });
+    if (!result) {
+      return;
+    }
+    const dir = Array.isArray(result) ? result[0] : result;
+    const updated = await invoke("set_prompts_dir", { path: dir });
+    config = { ...config, prompts_dir: dir };
+    prompts = normalizePrompts(updated ?? []);
+    status = "Folder updated";
+  }
+
+  async function applyHotkey() {
+    if (!hotkeyDraft.trim()) {
+      hotkeyError = "Hotkey cannot be empty";
+      return;
+    }
+    await registerHotkey(hotkeyDraft);
+    if (!hotkeyError) {
+      await invoke("set_hotkey", { hotkey: hotkeyDraft });
+      config = { ...config, hotkey: hotkeyDraft };
+      status = "Hotkey saved";
+    }
+  }
+
+  async function toggleAutoPaste() {
+    const nextValue = !config.auto_paste;
+    config = { ...config, auto_paste: nextValue };
+    await invoke("set_auto_paste", { autoPaste: nextValue });
+  }
+
+  async function usePrompt(prompt) {
+    if (!prompt) {
+      return;
+    }
+    await appWindow.hide();
+    await writeText(prompt.body);
+    await invoke("focus_last_window", { autoPaste: config.auto_paste });
+    query = "";
+    selectedIndex = 0;
+  }
+
+  async function openPrompt(prompt) {
+    if (!prompt) {
+      return;
+    }
+    await openPath(prompt.path);
+  }
+
+  function onSearchInput(event) {
+    query = event.target.value;
+    selectedIndex = 0;
+  }
+
+  function onSearchKeydown(event) {
+    if (filtered.length === 0) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        appWindow.hide();
+      }
+      return;
+    }
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      selectedIndex = Math.min(selectedIndex + 1, filtered.length - 1);
+      return;
+    }
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      selectedIndex = Math.max(selectedIndex - 1, 0);
+      return;
+    }
+    if (event.key === "Enter") {
+      event.preventDefault();
+      usePrompt(filtered[selectedIndex]);
+      return;
+    }
+    if (event.key === "Escape") {
+      event.preventDefault();
+      appWindow.hide();
+    }
+  }
+
+  function normalizePrompts(list) {
+    return list.map((prompt) => ({
+      ...prompt,
+      searchText: buildSearchText(prompt),
+      tagsLower: (prompt.tags ?? []).map((tag) => tag.toLowerCase())
+    }));
+  }
+
+  function buildSearchText(prompt) {
+    return `${prompt.title} ${prompt.preview} ${prompt.tags?.join(" ") ?? ""}`.toLowerCase();
+  }
+
+  function filterPrompts(list, rawQuery, limit) {
+    const trimmed = rawQuery.trim().toLowerCase();
+    if (!trimmed) {
+      return list.slice(0, limit);
+    }
+    const tagMatches = Array.from(trimmed.matchAll(/#([\w-]+)/g)).map(
+      (match) => match[1]
+    );
+    const queryText = trimmed.replace(/#([\w-]+)/g, "").trim();
+    const results = [];
+
+    for (const prompt of list) {
+      if (tagMatches.length) {
+        const hasAllTags = tagMatches.every((tag) =>
+          prompt.tagsLower?.includes(tag)
+        );
+        if (!hasAllTags) {
+          continue;
+        }
+      }
+      if (!queryText) {
+        results.push({ ...prompt, _score: 0 });
+        continue;
+      }
+      const score = scoreMatch(prompt.searchText ?? "", queryText);
+      if (score >= 0) {
+        results.push({ ...prompt, _score: score });
+      }
+    }
+
+    results.sort((a, b) => a._score - b._score);
+    return results.slice(0, limit);
+  }
+
+  function scoreMatch(text, queryText) {
+    const exact = text.indexOf(queryText);
+    let score = 0;
+    if (exact >= 0) {
+      score -= 200 + exact;
+    }
+    let lastIndex = -1;
+    for (const char of queryText) {
+      const nextIndex = text.indexOf(char, lastIndex + 1);
+      if (nextIndex === -1) {
+        return -1;
+      }
+      score += nextIndex - lastIndex;
+      lastIndex = nextIndex;
+    }
+    return score;
+  }
+</script>
+
+<main class="shell">
+  <section class="panel">
+    <header class="panel-header">
+      <div class="title">
+        <span class="name">Prompt Launcher</span>
+        <span class="meta">Hotkey: {config.hotkey}</span>
+      </div>
+      <div class="actions">
+        <button class="ghost" type="button" on:click={chooseFolder}>
+          Change Folder
+        </button>
+        <label class="toggle">
+          <input type="checkbox" checked={config.auto_paste} on:change={toggleAutoPaste} />
+          <span>Auto paste</span>
+        </label>
+      </div>
+    </header>
+
+    <div class="search">
+      <span class="search-icon">/</span>
+      <input
+        bind:this={searchInput}
+        class="search-input"
+        placeholder="Search prompts, use #tag"
+        value={query}
+        on:input={onSearchInput}
+        on:keydown={onSearchKeydown}
+      />
+      <span class="count">{filtered.length}</span>
+    </div>
+
+    <div class="content">
+      <div class="list">
+        {#if filtered.length === 0}
+          <div class="empty">
+            <span>No matches yet</span>
+            <span class="hint">Try a tag like #sql</span>
+          </div>
+        {:else}
+          {#each filtered as prompt, index (prompt.id)}
+            <div
+              class:selected={index === selectedIndex}
+              class="row"
+              style={`--i: ${index}`}
+              on:click={() => (selectedIndex = index)}
+              on:dblclick={() => usePrompt(prompt)}
+              on:contextmenu|preventDefault={() => openPrompt(prompt)}
+            >
+              <div class="row-title">
+                <span>{prompt.title}</span>
+                {#if prompt.tags?.length}
+                  <div class="tags">
+                    {#each prompt.tags as tag}
+                      <span class="tag">#{tag}</span>
+                    {/each}
+                  </div>
+                {/if}
+              </div>
+              <div class="row-preview">{prompt.preview}</div>
+            </div>
+          {/each}
+        {/if}
+      </div>
+
+      <aside class="preview">
+        {#if activePrompt}
+          <div class="preview-title">{activePrompt.title}</div>
+          <div class="preview-body">{activePrompt.body}</div>
+          <div class="preview-actions">
+            <button type="button" on:click={() => usePrompt(activePrompt)}>
+              Paste
+            </button>
+            <button class="ghost" type="button" on:click={() => openPrompt(activePrompt)}>
+              Open File
+            </button>
+          </div>
+        {:else}
+          <div class="preview-empty">
+            <span>Pick a prompt to preview</span>
+          </div>
+        {/if}
+      </aside>
+    </div>
+
+    <footer class="panel-footer">
+      <div class="hotkey">
+        <span>Change hotkey</span>
+        <input class="hotkey-input" bind:value={hotkeyDraft} />
+        <button type="button" on:click={applyHotkey}>Apply</button>
+      </div>
+      <div class="status">
+        {#if hotkeyError}
+          <span class="error">{hotkeyError}</span>
+        {:else if status}
+          <span>{status}</span>
+        {:else}
+          <span>Enter to paste, right click to open</span>
+        {/if}
+      </div>
+    </footer>
+  </section>
+</main>
+
+<style>
+:global(body) {
+  margin: 0;
+  background: transparent;
+  color: #1e2320;
+  font-family: "Bahnschrift", "Segoe UI", sans-serif;
+  letter-spacing: 0.01em;
+}
+
+:global(*),
+:global(*::before),
+:global(*::after) {
+  box-sizing: border-box;
+}
+
+.shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: radial-gradient(circle at 10% 10%, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0)) ,
+    radial-gradient(circle at 90% 0%, rgba(186, 227, 218, 0.35), rgba(186, 227, 218, 0)),
+    linear-gradient(135deg, rgba(246, 238, 228, 0.95), rgba(230, 242, 236, 0.96));
+}
+
+.panel {
+  width: min(820px, 92vw);
+  background: rgba(255, 255, 255, 0.76);
+  border-radius: 22px;
+  padding: 24px;
+  box-shadow:
+    0 30px 80px rgba(36, 57, 46, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(18px);
+  animation: rise 0.35s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.panel::before {
+  content: "";
+  position: absolute;
+  inset: -120px auto auto -120px;
+  width: 260px;
+  height: 260px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(175, 224, 201, 0.45), rgba(175, 224, 201, 0));
+}
+
+.panel::after {
+  content: "";
+  position: absolute;
+  inset: auto -80px -120px auto;
+  width: 240px;
+  height: 240px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(224, 197, 150, 0.4), rgba(224, 197, 150, 0));
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  position: relative;
+  z-index: 1;
+}
+
+.title {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.name {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.meta {
+  font-size: 12px;
+  color: #607063;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+}
+
+.ghost {
+  background: transparent;
+  border: 1px solid rgba(87, 107, 95, 0.4);
+  color: #375046;
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.toggle input {
+  accent-color: #2c6958;
+}
+
+.search {
+  margin-top: 18px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(134, 157, 140, 0.3);
+  position: relative;
+  z-index: 1;
+}
+
+.search-icon {
+  font-weight: 700;
+  color: #7e8f82;
+}
+
+.search-input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  font-size: 16px;
+  outline: none;
+}
+
+.count {
+  font-size: 12px;
+  color: #5f6f63;
+}
+
+.content {
+  display: grid;
+  grid-template-columns: 1.15fr 0.85fr;
+  gap: 18px;
+  margin-top: 18px;
+  position: relative;
+  z-index: 1;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 240px;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
+.row {
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.5);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: 0.2s ease;
+  animation: fadeUp 0.35s ease both;
+  animation-delay: calc(var(--i) * 40ms);
+}
+
+.row.selected {
+  border-color: rgba(61, 108, 90, 0.6);
+  background: rgba(221, 243, 232, 0.75);
+}
+
+.row-title {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.row-preview {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #6c7a70;
+}
+
+.tags {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.tag {
+  font-size: 10px;
+  background: rgba(52, 92, 78, 0.12);
+  color: #3e6b5b;
+  padding: 2px 6px;
+  border-radius: 999px;
+}
+
+.preview {
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 16px;
+  padding: 14px;
+  border: 1px solid rgba(134, 157, 140, 0.25);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 240px;
+}
+
+.preview-title {
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.preview-body {
+  font-size: 12px;
+  color: #4a5b51;
+  overflow-y: auto;
+  white-space: pre-wrap;
+}
+
+.preview-actions {
+  margin-top: auto;
+  display: flex;
+  gap: 10px;
+}
+
+.panel-footer {
+  margin-top: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  position: relative;
+  z-index: 1;
+}
+
+.hotkey {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.hotkey-input {
+  width: 140px;
+  border-radius: 8px;
+  border: 1px solid rgba(87, 107, 95, 0.4);
+  padding: 6px 8px;
+  font-size: 12px;
+  background: rgba(255, 255, 255, 0.85);
+}
+
+.status {
+  font-size: 12px;
+  color: #5b6a60;
+}
+
+.error {
+  color: #a34f3b;
+}
+
+button {
+  border: none;
+  padding: 8px 14px;
+  border-radius: 10px;
+  background: #2d6a57;
+  color: #f5f3ed;
+  font-size: 12px;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(45, 106, 87, 0.2);
+}
+
+.empty,
+.preview-empty {
+  padding: 16px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px dashed rgba(134, 157, 140, 0.3);
+  text-align: center;
+  font-size: 13px;
+  color: #6c7a70;
+}
+
+.hint {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 720px) {
+  .content {
+    grid-template-columns: 1fr;
+  }
+
+  .panel-footer {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+</style>
