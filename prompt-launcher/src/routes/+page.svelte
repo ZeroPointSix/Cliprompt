@@ -331,6 +331,55 @@
     showSettings = !showSettings;
   }
 
+  function getRowPreview(prompt: PromptEntry) {
+    const terms = extractTerms(query);
+    if (terms.length === 0) {
+      return prompt.preview;
+    }
+    const snippet = makeSnippet(prompt.body, terms);
+    return snippet || prompt.preview;
+  }
+
+  function extractTerms(rawQuery: string) {
+    return rawQuery
+      .split(/\s+/)
+      .filter((term) => term && !term.startsWith("#"))
+      .map((term) => term.toLowerCase());
+  }
+
+  function makeSnippet(body: string, terms: string[]) {
+    if (!body) {
+      return "";
+    }
+    const compact = body.replace(/\s+/g, " ").trim();
+    const lower = compact.toLowerCase();
+    let bestIndex = -1;
+    let bestTerm = "";
+
+    for (const term of terms) {
+      const index = lower.indexOf(term);
+      if (index !== -1 && (bestIndex === -1 || index < bestIndex)) {
+        bestIndex = index;
+        bestTerm = term;
+      }
+    }
+
+    if (bestIndex === -1) {
+      return "";
+    }
+
+    const start = Math.max(0, bestIndex - 40);
+    const end = Math.min(compact.length, bestIndex + bestTerm.length + 60);
+    let snippet = compact.slice(start, end).trim();
+    if (start > 0) {
+      snippet = `...${snippet}`;
+    }
+    if (end < compact.length) {
+      snippet = `${snippet}...`;
+    }
+    return snippet;
+  }
+
   function onSearchInput(event: Event) {
     const target = event.target as HTMLInputElement | null;
     query = target?.value ?? "";
@@ -511,10 +560,10 @@
                       Fav
                     </button>
                   </div>
-                </div>
-                <div class="row-preview">{item.prompt.preview}</div>
               </div>
-            {/each}
+              <div class="row-preview">{getRowPreview(item.prompt)}</div>
+            </div>
+          {/each}
           {/if}
           {#if favoritesList.length > 0}
             <div class="section-label">Favorites</div>
@@ -563,10 +612,10 @@
                       Fav
                     </button>
                   </div>
-                </div>
-                <div class="row-preview">{item.prompt.preview}</div>
               </div>
-            {/each}
+              <div class="row-preview">{getRowPreview(item.prompt)}</div>
+            </div>
+          {/each}
           {/if}
           {#if regularList.length > 0}
             <div class="section-label">All prompts</div>
@@ -615,10 +664,10 @@
                       Fav
                     </button>
                   </div>
-                </div>
-                <div class="row-preview">{item.prompt.preview}</div>
               </div>
-            {/each}
+              <div class="row-preview">{getRowPreview(item.prompt)}</div>
+            </div>
+          {/each}
           {/if}
         {:else}
           {#each filtered as prompt, index (prompt.id)}
@@ -667,7 +716,7 @@
                   </button>
                 </div>
               </div>
-              <div class="row-preview">{prompt.preview}</div>
+              <div class="row-preview">{getRowPreview(prompt)}</div>
             </div>
           {/each}
         {/if}

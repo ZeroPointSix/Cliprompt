@@ -95,3 +95,8 @@
 
 - [x] Add recent filter and enable/clear controls.
 - [x] Run `npm run check` after code updates.
+
+## Iteration 19 (Snippets)
+
+- [x] Show matched snippets in list rows while searching.
+- [x] Run `npm run check` after code updates.

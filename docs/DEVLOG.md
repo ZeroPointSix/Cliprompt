@@ -24,3 +24,4 @@
 - Added a copy-path action for prompt files.
 - Added a recent section and persisted recently used prompts.
 - Added recent filter, enable toggle, and clear action.
+- Added matched snippets in list rows when searching.
