@@ -179,6 +179,14 @@
     void refreshResults();
   }
 
+  async function copyPrompt(prompt: PromptEntry | null | undefined) {
+    if (!prompt) {
+      return;
+    }
+    await writeText(prompt.body);
+    status = "Copied to clipboard";
+  }
+
   async function openPrompt(prompt: PromptEntry | null | undefined) {
     if (!prompt) {
       return;
@@ -338,6 +346,9 @@
           <div class="preview-actions">
             <button type="button" onclick={() => usePrompt(activePrompt)}>
               Paste
+            </button>
+            <button class="ghost" type="button" onclick={() => copyPrompt(activePrompt)}>
+              Copy
             </button>
             <button class="ghost" type="button" onclick={() => openPrompt(activePrompt)}>
               Open File

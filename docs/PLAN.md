@@ -35,3 +35,8 @@
 
 - [x] Report auto-start registration failures in the UI.
 - [x] Run `npm run check` after code updates.
+
+## Iteration 7 (Quick actions)
+
+- [x] Add a copy-only action in the preview pane.
+- [x] Run `npm run check` after code updates.

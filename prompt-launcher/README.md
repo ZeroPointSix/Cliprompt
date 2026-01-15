@@ -13,6 +13,7 @@ Minimal Windows prompt manager that stays local, is file driven, and pastes into
 - Tray menu with show/hide/quit
 - Optional start with Windows
 - Rust-side fuzzy ranking for large prompt sets
+- Copy-only quick action in preview
 
 ## Quickstart
 

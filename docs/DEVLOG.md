@@ -12,3 +12,4 @@
 - Added a start-with-Windows toggle backed by registry updates.
 - Moved fuzzy search scoring to Rust with a lightweight debounce on input.
 - Added UI feedback when auto-start registration fails.
+- Added a copy-only quick action in the preview panel.
