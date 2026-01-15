@@ -21,3 +21,4 @@
 - Added a favorites section pinned to the top of the list.
 - Improved fuzzy ranking with term matching and word-boundary bias.
 - Added a filter mode chip in the header.
+- Added a copy-path action for prompt files.

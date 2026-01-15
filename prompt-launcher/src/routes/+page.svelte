@@ -238,6 +238,14 @@
     status = "Title copied";
   }
 
+  async function copyPath(prompt: PromptEntry | null | undefined) {
+    if (!prompt) {
+      return;
+    }
+    await writeText(prompt.path);
+    status = "Path copied";
+  }
+
   async function openPrompt(prompt: PromptEntry | null | undefined) {
     if (!prompt) {
       return;
@@ -548,6 +556,9 @@
             </button>
             <button class="ghost" type="button" onclick={() => copyTitle(activePrompt)}>
               Copy Title
+            </button>
+            <button class="ghost" type="button" onclick={() => copyPath(activePrompt)}>
+              Copy Path
             </button>
             <button class="ghost" type="button" onclick={() => openPrompt(activePrompt)}>
               Open File

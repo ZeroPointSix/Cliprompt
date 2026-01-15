@@ -80,3 +80,8 @@
 
 - [x] Add a filter mode chip in the header.
 - [x] Run `npm run check` after code updates.
+
+## Iteration 16 (Copy path)
+
+- [x] Add a copy-path action in the preview pane.
+- [x] Run `npm run check` after code updates.
