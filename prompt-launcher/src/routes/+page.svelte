@@ -1,43 +1,71 @@
-<script>
+<script lang="ts">
   import { onDestroy, onMount, tick } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
-  import { listen } from "@tauri-apps/api/event";
+  import { listen, type UnlistenFn } from "@tauri-apps/api/event";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { open as openDialog } from "@tauri-apps/plugin-dialog";
   import { register, unregister } from "@tauri-apps/plugin-global-shortcut";
   import { writeText } from "@tauri-apps/plugin-clipboard-manager";
-  import { open as openPath } from "@tauri-apps/plugin-opener";
+  import { openPath } from "@tauri-apps/plugin-opener";
+
+  type PromptEntry = {
+    id: string;
+    title: string;
+    body: string;
+    preview: string;
+    tags: string[];
+    path: string;
+    searchText?: string;
+    tagsLower?: string[];
+    _score?: number;
+  };
+
+  type AppConfig = {
+    prompts_dir: string;
+    auto_paste: boolean;
+    hotkey: string;
+  };
+
+  type ScoredPrompt = PromptEntry & { _score: number };
 
   const appWindow = getCurrentWindow();
   const maxResults = 8;
 
-  let searchInput;
-  let query = $state("");
-  let prompts = $state([]);
-  let config = $state({
+  let searchInput: HTMLInputElement | null = null;
+  let query = $state<string>("");
+  let prompts = $state<PromptEntry[]>([]);
+  let config = $state<AppConfig>({
     prompts_dir: "",
     auto_paste: true,
     hotkey: "Alt+Space"
   });
-  let selectedIndex = $state(0);
-  let status = $state("");
-  let hotkeyDraft = $state("");
-  let hotkeyError = $state("");
+  let selectedIndex = $state<number>(0);
+  let status = $state<string>("");
+  let hotkeyDraft = $state<string>("");
+  let hotkeyError = $state<string>("");
   let currentHotkey = "";
 
-  let filtered = $derived(() => filterPrompts(prompts, query, maxResults));
-  let activePrompt = $derived(() => filtered[selectedIndex] ?? null);
+  let filtered = $state<PromptEntry[]>([]);
+  let activePrompt = $state<PromptEntry | null>(null);
 
-  let unlistenPrompts;
-  let unlistenFocus;
+  let unlistenPrompts: UnlistenFn | null = null;
+  let unlistenFocus: UnlistenFn | null = null;
+
+  $effect(() => {
+    filtered = filterPrompts(prompts, query, maxResults);
+    if (selectedIndex >= filtered.length) {
+      selectedIndex = 0;
+    }
+    activePrompt = filtered[selectedIndex] ?? null;
+  });
 
   onMount(async () => {
-    config = await invoke("get_config");
+    config = await invoke<AppConfig>("get_config");
     hotkeyDraft = config.hotkey;
-    prompts = normalizePrompts(await invoke("list_prompts"));
+    prompts = normalizePrompts(await invoke<PromptEntry[]>("list_prompts"));
     await registerHotkey(config.hotkey);
 
-    unlistenPrompts = await listen("prompts-updated", (event) => {
+    unlistenPrompts = await listen<PromptEntry[]>("prompts-updated", (event) => {
       prompts = normalizePrompts(event.payload ?? []);
       selectedIndex = 0;
     });
@@ -63,7 +91,7 @@
     }
   });
 
-  async function registerHotkey(hotkey) {
+  async function registerHotkey(hotkey: string) {
     hotkeyError = "";
     if (currentHotkey) {
       await unregister(currentHotkey).catch(() => {});
@@ -106,7 +134,7 @@
       return;
     }
     const dir = Array.isArray(result) ? result[0] : result;
-    const updated = await invoke("set_prompts_dir", { path: dir });
+    const updated = await invoke<PromptEntry[]>("set_prompts_dir", { path: dir });
     config = { ...config, prompts_dir: dir };
     prompts = normalizePrompts(updated ?? []);
     status = "Folder updated";
@@ -131,7 +159,7 @@
     await invoke("set_auto_paste", { autoPaste: nextValue });
   }
 
-  async function usePrompt(prompt) {
+  async function usePrompt(prompt: PromptEntry | null | undefined) {
     if (!prompt) {
       return;
     }
@@ -142,19 +170,20 @@
     selectedIndex = 0;
   }
 
-  async function openPrompt(prompt) {
+  async function openPrompt(prompt: PromptEntry | null | undefined) {
     if (!prompt) {
       return;
     }
     await openPath(prompt.path);
   }
 
-  function onSearchInput(event) {
-    query = event.target.value;
+  function onSearchInput(event: Event) {
+    const target = event.target as HTMLInputElement | null;
+    query = target?.value ?? "";
     selectedIndex = 0;
   }
 
-  function onSearchKeydown(event) {
+  function onSearchKeydown(event: KeyboardEvent) {
     if (filtered.length === 0) {
       if (event.key === "Escape") {
         event.preventDefault();
@@ -183,7 +212,7 @@
     }
   }
 
-  function normalizePrompts(list) {
+  function normalizePrompts(list: PromptEntry[]) {
     return list.map((prompt) => ({
       ...prompt,
       searchText: buildSearchText(prompt),
@@ -191,11 +220,11 @@
     }));
   }
 
-  function buildSearchText(prompt) {
+  function buildSearchText(prompt: PromptEntry) {
     return `${prompt.title} ${prompt.preview} ${prompt.tags?.join(" ") ?? ""}`.toLowerCase();
   }
 
-  function filterPrompts(list, rawQuery, limit) {
+  function filterPrompts(list: PromptEntry[], rawQuery: string, limit: number) {
     const trimmed = rawQuery.trim().toLowerCase();
     if (!trimmed) {
       return list.slice(0, limit);
@@ -204,7 +233,7 @@
       (match) => match[1]
     );
     const queryText = trimmed.replace(/#([\w-]+)/g, "").trim();
-    const results = [];
+    const results: ScoredPrompt[] = [];
 
     for (const prompt of list) {
       if (tagMatches.length) {
@@ -229,7 +258,7 @@
     return results.slice(0, limit);
   }
 
-  function scoreMatch(text, queryText) {
+  function scoreMatch(text: string, queryText: string) {
     const exact = text.indexOf(queryText);
     let score = 0;
     if (exact >= 0) {
@@ -256,11 +285,11 @@
         <span class="meta">Hotkey: {config.hotkey}</span>
       </div>
       <div class="actions">
-        <button class="ghost" type="button" on:click={chooseFolder}>
+        <button class="ghost" type="button" onclick={chooseFolder}>
           Change Folder
         </button>
         <label class="toggle">
-          <input type="checkbox" checked={config.auto_paste} on:change={toggleAutoPaste} />
+          <input type="checkbox" checked={config.auto_paste} onchange={toggleAutoPaste} />
           <span>Auto paste</span>
         </label>
       </div>
@@ -273,8 +302,8 @@
         class="search-input"
         placeholder="Search prompts, use #tag"
         value={query}
-        on:input={onSearchInput}
-        on:keydown={onSearchKeydown}
+        oninput={onSearchInput}
+        onkeydown={onSearchKeydown}
       />
       <span class="count">{filtered.length}</span>
     </div>
@@ -288,13 +317,17 @@
           </div>
         {:else}
           {#each filtered as prompt, index (prompt.id)}
-            <div
+            <button
               class:selected={index === selectedIndex}
               class="row"
               style={`--i: ${index}`}
-              on:click={() => (selectedIndex = index)}
-              on:dblclick={() => usePrompt(prompt)}
-              on:contextmenu|preventDefault={() => openPrompt(prompt)}
+              onclick={() => (selectedIndex = index)}
+              ondblclick={() => usePrompt(prompt)}
+              oncontextmenu={(event) => {
+                event.preventDefault();
+                openPrompt(prompt);
+              }}
+              type="button"
             >
               <div class="row-title">
                 <span>{prompt.title}</span>
@@ -307,7 +340,7 @@
                 {/if}
               </div>
               <div class="row-preview">{prompt.preview}</div>
-            </div>
+            </button>
           {/each}
         {/if}
       </div>
@@ -317,10 +350,10 @@
           <div class="preview-title">{activePrompt.title}</div>
           <div class="preview-body">{activePrompt.body}</div>
           <div class="preview-actions">
-            <button type="button" on:click={() => usePrompt(activePrompt)}>
+            <button type="button" onclick={() => usePrompt(activePrompt)}>
               Paste
             </button>
-            <button class="ghost" type="button" on:click={() => openPrompt(activePrompt)}>
+            <button class="ghost" type="button" onclick={() => openPrompt(activePrompt)}>
               Open File
             </button>
           </div>
@@ -336,7 +369,7 @@
       <div class="hotkey">
         <span>Change hotkey</span>
         <input class="hotkey-input" bind:value={hotkeyDraft} />
-        <button type="button" on:click={applyHotkey}>Apply</button>
+        <button type="button" onclick={applyHotkey}>Apply</button>
       </div>
       <div class="status">
         {#if hotkeyError}
@@ -615,7 +648,7 @@
   color: #a34f3b;
 }
 
-button {
+.panel button:not(.row) {
   border: none;
   padding: 8px 14px;
   border-radius: 10px;
@@ -626,7 +659,7 @@ button {
   transition: 0.2s ease;
 }
 
-button:hover {
+.panel button:not(.row):hover {
   transform: translateY(-1px);
   box-shadow: 0 8px 18px rgba(45, 106, 87, 0.2);
 }
