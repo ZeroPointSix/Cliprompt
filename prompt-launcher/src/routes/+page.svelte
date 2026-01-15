@@ -187,6 +187,14 @@
     status = "Copied to clipboard";
   }
 
+  async function copyTitle(prompt: PromptEntry | null | undefined) {
+    if (!prompt) {
+      return;
+    }
+    await writeText(prompt.title);
+    status = "Title copied";
+  }
+
   async function openPrompt(prompt: PromptEntry | null | undefined) {
     if (!prompt) {
       return;
@@ -349,6 +357,9 @@
             </button>
             <button class="ghost" type="button" onclick={() => copyPrompt(activePrompt)}>
               Copy
+            </button>
+            <button class="ghost" type="button" onclick={() => copyTitle(activePrompt)}>
+              Copy Title
             </button>
             <button class="ghost" type="button" onclick={() => openPrompt(activePrompt)}>
               Open File

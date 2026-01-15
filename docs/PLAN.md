@@ -40,3 +40,8 @@
 
 - [x] Add a copy-only action in the preview pane.
 - [x] Run `npm run check` after code updates.
+
+## Iteration 8 (Title copy)
+
+- [x] Add a copy-title quick action in the preview pane.
+- [x] Run `npm run check` after code updates.
