@@ -11,3 +11,4 @@
 - Added a tray menu (show/hide/quit) with click-to-toggle behavior.
 - Added a start-with-Windows toggle backed by registry updates.
 - Moved fuzzy search scoring to Rust with a lightweight debounce on input.
+- Added UI feedback when auto-start registration fails.

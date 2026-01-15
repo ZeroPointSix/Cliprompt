@@ -30,3 +30,8 @@
 - [x] Move fuzzy ranking to Rust for large prompt sets.
 - [x] Query backend on input with simple debounce.
 - [x] Run `npm run check` after code updates.
+
+## Iteration 6 (Startup diagnostics)
+
+- [x] Report auto-start registration failures in the UI.
+- [x] Run `npm run check` after code updates.

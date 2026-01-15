@@ -39,6 +39,7 @@
   let status = $state<string>("");
   let hotkeyDraft = $state<string>("");
   let hotkeyError = $state<string>("");
+  let settingsError = $state<string>("");
   let currentHotkey = "";
 
   let filtered = $state<PromptEntry[]>([]);
@@ -144,6 +145,7 @@
       await invoke("set_hotkey", { hotkey: hotkeyDraft });
       config = { ...config, hotkey: hotkeyDraft };
       status = "Hotkey saved";
+      settingsError = "";
     }
   }
 
@@ -156,7 +158,13 @@
   async function toggleAutoStart() {
     const nextValue = !config.auto_start;
     config = { ...config, auto_start: nextValue };
-    await invoke("set_auto_start", { autoStart: nextValue });
+    try {
+      await invoke("set_auto_start", { autoStart: nextValue });
+      settingsError = "";
+    } catch (error) {
+      config = { ...config, auto_start: !nextValue };
+      settingsError = `Auto-start failed: ${error}`;
+    }
   }
 
   async function usePrompt(prompt: PromptEntry | null | undefined) {
@@ -352,6 +360,8 @@
       <div class="status">
         {#if hotkeyError}
           <span class="error">{hotkeyError}</span>
+        {:else if settingsError}
+          <span class="error">{settingsError}</span>
         {:else if status}
           <span>{status}</span>
         {:else}
