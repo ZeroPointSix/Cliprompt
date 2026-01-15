@@ -11,6 +11,7 @@ Minimal Windows prompt manager that stays local, is file driven, and pastes into
 - Right click to open source file
 - Quick open for the prompts folder
 - Tray menu with show/hide/quit
+- Optional start with Windows
 
 ## Quickstart
 

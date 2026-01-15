@@ -9,3 +9,4 @@
 - Added `docs/PLAN.md` to track iteration scope.
 - Added folder-name tags and seeded example prompts when the folder is empty.
 - Added a tray menu (show/hide/quit) with click-to-toggle behavior.
+- Added a start-with-Windows toggle backed by registry updates.

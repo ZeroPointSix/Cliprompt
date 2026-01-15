@@ -18,3 +18,9 @@
 - [x] Add a system tray menu with show/hide/quit.
 - [x] Toggle window on tray click while capturing active focus.
 - [x] Run `npm run check` after code updates.
+
+## Iteration 4 (Auto-start)
+
+- [x] Add start-with-Windows toggle in UI.
+- [x] Persist auto-start in config and apply to registry.
+- [x] Run `npm run check` after code updates.

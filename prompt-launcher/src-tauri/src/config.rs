@@ -8,6 +8,8 @@ pub struct AppConfig {
     pub prompts_dir: String,
     pub auto_paste: bool,
     pub hotkey: String,
+    #[serde(default)]
+    pub auto_start: bool,
 }
 
 impl Default for AppConfig {
@@ -16,6 +18,7 @@ impl Default for AppConfig {
             prompts_dir: String::new(),
             auto_paste: true,
             hotkey: "Alt+Space".to_string(),
+            auto_start: false,
         }
     }
 }

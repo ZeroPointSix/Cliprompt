@@ -1,3 +1,4 @@
+mod autostart;
 mod config;
 mod prompts;
 mod win;
@@ -84,6 +85,22 @@ fn set_hotkey(
 ) -> Result<(), String> {
     let mut config = state.config.lock().unwrap();
     config.hotkey = hotkey;
+    save(&app, &config)
+}
+
+#[tauri::command]
+fn set_auto_start(
+    app: AppHandle,
+    state: State<Arc<AppState>>,
+    auto_start: bool,
+) -> Result<(), String> {
+    let exe_path = std::env::current_exe()
+        .map_err(|e| format!("resolve exe path failed: {e}"))?;
+
+    autostart::set_auto_start(auto_start, &exe_path)?;
+
+    let mut config = state.config.lock().unwrap();
+    config.auto_start = auto_start;
     save(&app, &config)
 }
 
@@ -285,6 +302,9 @@ pub fn run() {
                 .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
             seed_prompts_if_empty(&dir)
                 .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+            let _ = std::env::current_exe()
+                .map_err(|e| format!("resolve exe path failed: {e}"))
+                .and_then(|exe| autostart::set_auto_start(config.auto_start, &exe));
 
             let state = Arc::new(AppState::new(config));
             let prompts = index_prompts(&dir);
@@ -307,6 +327,7 @@ pub fn run() {
             set_prompts_dir,
             set_auto_paste,
             set_hotkey,
+            set_auto_start,
             capture_active_window,
             focus_last_window
         ])

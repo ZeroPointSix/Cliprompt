@@ -24,6 +24,7 @@
     prompts_dir: string;
     auto_paste: boolean;
     hotkey: string;
+    auto_start: boolean;
   };
 
   type ScoredPrompt = PromptEntry & { _score: number };
@@ -37,7 +38,8 @@
   let config = $state<AppConfig>({
     prompts_dir: "",
     auto_paste: true,
-    hotkey: "Alt+Space"
+    hotkey: "Alt+Space",
+    auto_start: false
   });
   let selectedIndex = $state<number>(0);
   let status = $state<string>("");
@@ -157,6 +159,12 @@
     const nextValue = !config.auto_paste;
     config = { ...config, auto_paste: nextValue };
     await invoke("set_auto_paste", { autoPaste: nextValue });
+  }
+
+  async function toggleAutoStart() {
+    const nextValue = !config.auto_start;
+    config = { ...config, auto_start: nextValue };
+    await invoke("set_auto_start", { autoStart: nextValue });
   }
 
   async function usePrompt(prompt: PromptEntry | null | undefined) {
@@ -303,6 +311,10 @@
         <label class="toggle">
           <input type="checkbox" checked={config.auto_paste} onchange={toggleAutoPaste} />
           <span>Auto paste</span>
+        </label>
+        <label class="toggle">
+          <input type="checkbox" checked={config.auto_start} onchange={toggleAutoStart} />
+          <span>Auto start</span>
         </label>
       </div>
     </header>
