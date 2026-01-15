@@ -7,3 +7,4 @@
 - Built the MVP UI with search, preview, folder picker, and hotkey settings.
 - Expanded search to include prompt bodies and added quick open for the prompts folder.
 - Added `docs/PLAN.md` to track iteration scope.
+- Added folder-name tags and seeded example prompts when the folder is empty.

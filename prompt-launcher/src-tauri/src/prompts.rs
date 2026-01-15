@@ -24,21 +24,26 @@ pub fn index_prompts(dir: &Path) -> Vec<PromptEntry> {
         if !is_prompt_file(path) {
             continue;
         }
-        if let Some(prompt) = read_prompt(path) {
+        if let Some(prompt) = read_prompt(path, dir) {
             entries.push(prompt);
         }
     }
     entries
 }
 
-fn read_prompt(path: &Path) -> Option<PromptEntry> {
+fn read_prompt(path: &Path, root: &Path) -> Option<PromptEntry> {
     let body = fs::read_to_string(path).ok()?;
     let title = path
         .file_stem()
         .unwrap_or_default()
         .to_string_lossy()
         .to_string();
-    let tags = extract_tags(&title);
+    let mut tags: HashSet<String> = extract_tags(&title).into_iter().collect();
+    for tag in extract_path_tags(path, root) {
+        tags.insert(tag);
+    }
+    let mut tags: Vec<String> = tags.into_iter().collect();
+    tags.sort();
     let preview = make_preview(&body);
     let path_string = path.to_string_lossy().to_string();
 
@@ -97,8 +102,23 @@ fn extract_tags(title: &str) -> Vec<String> {
         }
     }
 
-    let mut tags: Vec<String> = tags.into_iter().collect();
-    tags.sort();
+    tags.into_iter().collect()
+}
+
+fn extract_path_tags(path: &Path, root: &Path) -> Vec<String> {
+    let mut tags = Vec::new();
+    let Ok(relative) = path.strip_prefix(root) else {
+        return tags;
+    };
+    let Some(parent) = relative.parent() else {
+        return tags;
+    };
+    for component in parent.components() {
+        let name = component.as_os_str().to_string_lossy();
+        if let Some(tag) = normalize_tag(&name) {
+            tags.push(tag);
+        }
+    }
     tags
 }
 

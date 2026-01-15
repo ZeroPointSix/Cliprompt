@@ -25,12 +25,14 @@ npm run tauri dev
 - Each prompt is a single file.
 - Title = filename (no extension).
 - Tags can be encoded in filenames with `#tag` or `[Tag]`.
+- Folder names become tags automatically.
 - Search matches filename, tags, preview, and full body.
 
 ## Defaults
 
 - Prompts folder: `Documents/PromptLauncher/Prompts`
 - Config file: `AppConfig/config.json` (Tauri app config directory)
+- Empty prompt folders are seeded with a few sample files.
 
 ## Notes
 

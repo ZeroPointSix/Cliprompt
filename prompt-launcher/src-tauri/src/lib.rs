@@ -116,6 +116,40 @@ fn refresh_prompts(state: &Arc<AppState>, dir: &Path) -> Vec<PromptEntry> {
     prompts
 }
 
+fn seed_prompts_if_empty(dir: &Path) -> Result<(), String> {
+    if !dir.exists() {
+        return Ok(());
+    }
+    if !index_prompts(dir).is_empty() {
+        return Ok(());
+    }
+
+    let quickstart = dir.join("Quickstart #welcome.md");
+    if !quickstart.exists() {
+        let content = "\
+Prompt Launcher Quickstart
+
+- Use the global hotkey to open the launcher.
+- Type to search, including #tags.
+- Enter pastes. Right click opens the file.
+";
+        fs::write(&quickstart, content).map_err(|e| format!("seed quickstart failed: {e}"))?;
+    }
+
+    let examples_dir = dir.join("Examples");
+    fs::create_dir_all(&examples_dir).map_err(|e| format!("seed dir failed: {e}"))?;
+    let email = examples_dir.join("Email reply #email.txt");
+    if !email.exists() {
+        let content = "\
+Reply in a friendly, concise tone.
+Summarize the request, confirm next steps, and ask for missing details.
+";
+        fs::write(&email, content).map_err(|e| format!("seed email failed: {e}"))?;
+    }
+
+    Ok(())
+}
+
 fn start_watcher(
     app: AppHandle,
     state: Arc<AppState>,
@@ -159,6 +193,8 @@ pub fn run() {
 
             let dir = PathBuf::from(&config.prompts_dir);
             fs::create_dir_all(&dir)
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+            seed_prompts_if_empty(&dir)
                 .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
 
             let state = Arc::new(AppState::new(config));

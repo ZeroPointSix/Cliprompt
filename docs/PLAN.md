@@ -6,3 +6,9 @@
 - [x] Show current prompts folder and quick-open it.
 - [x] Keep docs and dev log aligned with changes.
 - [x] Run `npm run check` after code updates.
+
+## Iteration 2 (Quality of life)
+
+- [x] Add directory tags from folder names.
+- [x] Seed sample prompts when the folder is empty.
+- [x] Run `npm run check` after code updates.
