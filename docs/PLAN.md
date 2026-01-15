@@ -110,3 +110,8 @@
 
 - [x] Add a shortcut to toggle the recent filter.
 - [x] Run `npm run check` after code updates.
+
+## Iteration 22 (Last used)
+
+- [x] Show last-used timestamp in the preview panel.
+- [x] Run `npm run check` after code updates.

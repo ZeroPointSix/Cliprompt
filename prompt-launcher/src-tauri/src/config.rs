@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use tauri::{path::BaseDirectory, AppHandle, Manager};
@@ -16,6 +17,8 @@ pub struct AppConfig {
     pub recent_ids: Vec<String>,
     #[serde(default)]
     pub recent_enabled: bool,
+    #[serde(default)]
+    pub recent_meta: HashMap<String, i64>,
 }
 
 impl Default for AppConfig {
@@ -28,6 +31,7 @@ impl Default for AppConfig {
             favorites: Vec::new(),
             recent_ids: Vec::new(),
             recent_enabled: true,
+            recent_meta: HashMap::new(),
         }
     }
 }

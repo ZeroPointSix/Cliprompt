@@ -4,11 +4,13 @@ mod prompts;
 mod win;
 
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
+use serde::Serialize;
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread;
+use std::time::{SystemTime, UNIX_EPOCH};
 use std::time::Duration;
 use tauri::{
     menu::{Menu, MenuItem},
@@ -24,6 +26,12 @@ struct AppState {
     config: Mutex<AppConfig>,
     watcher: Mutex<Option<RecommendedWatcher>>,
     last_active_hwnd: Mutex<Option<isize>>,
+}
+
+#[derive(Serialize)]
+struct RecentState {
+    recent_ids: Vec<String>,
+    recent_meta: std::collections::HashMap<String, i64>,
 }
 
 impl AppState {
@@ -147,15 +155,28 @@ fn push_recent(
     app: AppHandle,
     state: State<Arc<AppState>>,
     id: String,
-) -> Result<Vec<String>, String> {
+) -> Result<RecentState, String> {
     let mut config = state.config.lock().unwrap();
     config.recent_ids.retain(|item| item != &id);
     config.recent_ids.insert(0, id);
     if config.recent_ids.len() > 20 {
         config.recent_ids.truncate(20);
     }
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|e| format!("time error: {e}"))?
+        .as_millis() as i64;
+    let current_id = config.recent_ids.first().cloned().unwrap_or_default();
+    if !current_id.is_empty() {
+        config.recent_meta.insert(current_id, now);
+    }
+    let keep: HashSet<String> = config.recent_ids.iter().cloned().collect();
+    config.recent_meta.retain(|key, _| keep.contains(key));
     save(&app, &config)?;
-    Ok(config.recent_ids.clone())
+    Ok(RecentState {
+        recent_ids: config.recent_ids.clone(),
+        recent_meta: config.recent_meta.clone(),
+    })
 }
 
 #[tauri::command]
@@ -173,11 +194,15 @@ fn set_recent_enabled(
 fn clear_recent(
     app: AppHandle,
     state: State<Arc<AppState>>,
-) -> Result<Vec<String>, String> {
+) -> Result<RecentState, String> {
     let mut config = state.config.lock().unwrap();
     config.recent_ids.clear();
+    config.recent_meta.clear();
     save(&app, &config)?;
-    Ok(config.recent_ids.clone())
+    Ok(RecentState {
+        recent_ids: config.recent_ids.clone(),
+        recent_meta: config.recent_meta.clone(),
+    })
 }
 
 #[tauri::command]

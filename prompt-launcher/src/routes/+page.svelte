@@ -25,6 +25,12 @@
     favorites: string[];
     recent_ids: string[];
     recent_enabled: boolean;
+    recent_meta: Record<string, number>;
+  };
+
+  type RecentState = {
+    recent_ids: string[];
+    recent_meta: Record<string, number>;
   };
 
   const appWindow = getCurrentWindow();
@@ -39,7 +45,8 @@
     auto_start: false,
     favorites: [],
     recent_ids: [],
-    recent_enabled: true
+    recent_enabled: true,
+    recent_meta: {}
   });
   let selectedIndex = $state<number>(0);
   let status = $state<string>("");
@@ -252,8 +259,12 @@
     if (!config.recent_enabled) {
       return;
     }
-    const recentIds = await invoke<string[]>("push_recent", { id: prompt.id });
-    config = { ...config, recent_ids: recentIds ?? [] };
+    const recentState = await invoke<RecentState>("push_recent", { id: prompt.id });
+    config = {
+      ...config,
+      recent_ids: recentState?.recent_ids ?? [],
+      recent_meta: recentState?.recent_meta ?? {}
+    };
   }
 
   async function toggleRecentEnabled() {
@@ -261,15 +272,24 @@
     config = { ...config, recent_enabled: nextValue };
     await invoke("set_recent_enabled", { recentEnabled: nextValue });
     if (!nextValue) {
-      const recentIds = await invoke<string[]>("clear_recent");
-      config = { ...config, recent_ids: recentIds ?? [], recent_enabled: nextValue };
+      const recentState = await invoke<RecentState>("clear_recent");
+      config = {
+        ...config,
+        recent_ids: recentState?.recent_ids ?? [],
+        recent_meta: recentState?.recent_meta ?? {},
+        recent_enabled: nextValue
+      };
     }
     void refreshResults();
   }
 
   async function clearRecent() {
-    const recentIds = await invoke<string[]>("clear_recent");
-    config = { ...config, recent_ids: recentIds ?? [] };
+    const recentState = await invoke<RecentState>("clear_recent");
+    config = {
+      ...config,
+      recent_ids: recentState?.recent_ids ?? [],
+      recent_meta: recentState?.recent_meta ?? {}
+    };
     void refreshResults();
   }
 
@@ -378,6 +398,24 @@
       snippet = `${snippet}...`;
     }
     return snippet;
+  }
+
+  function formatLastUsed(prompt: PromptEntry) {
+    const timestamp = config.recent_meta[prompt.id];
+    if (!timestamp) {
+      return "Never";
+    }
+    const delta = Date.now() - timestamp;
+    if (delta < 60000) {
+      return "Just now";
+    }
+    if (delta < 3600000) {
+      return `${Math.floor(delta / 60000)}m ago`;
+    }
+    if (delta < 86400000) {
+      return `${Math.floor(delta / 3600000)}h ago`;
+    }
+    return `${Math.floor(delta / 86400000)}d ago`;
   }
 
   function onSearchInput(event: Event) {
@@ -745,6 +783,7 @@
       <aside class="preview">
         {#if activePrompt}
           <div class="preview-title">{activePrompt.title}</div>
+          <div class="preview-meta">Last used: {formatLastUsed(activePrompt)}</div>
           <div class="preview-body">{activePrompt.body}</div>
           <div class="preview-actions">
             <button type="button" onclick={() => usePrompt(activePrompt)}>
@@ -1107,6 +1146,11 @@
 .preview-title {
   font-weight: 700;
   font-size: 14px;
+}
+
+.preview-meta {
+  font-size: 11px;
+  color: #6c7a70;
 }
 
 .preview-body {
