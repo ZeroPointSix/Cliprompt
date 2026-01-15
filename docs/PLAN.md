@@ -75,3 +75,8 @@
 
 - [x] Improve Rust scoring with term matching and word-boundary bias.
 - [x] Run `npm run check` after code updates.
+
+## Iteration 15 (Filter chip)
+
+- [x] Add a filter mode chip in the header.
+- [x] Run `npm run check` after code updates.

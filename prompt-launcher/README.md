@@ -21,6 +21,7 @@ Minimal Windows prompt manager that stays local, is file driven, and pastes into
 - Favorites count displayed in the header
 - Favorites section pinned at the top of the list
 - Improved fuzzy ranking with term and boundary scoring
+- Filter mode chip in the header
 
 ## Quickstart
 

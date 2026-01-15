@@ -20,3 +20,4 @@
 - Added a favorites count badge and active filter state.
 - Added a favorites section pinned to the top of the list.
 - Improved fuzzy ranking with term matching and word-boundary bias.
+- Added a filter mode chip in the header.

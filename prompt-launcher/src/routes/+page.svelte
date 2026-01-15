@@ -336,6 +336,9 @@
         <span class="meta">Hotkey: {config.hotkey}</span>
         <span class="meta">Folder: {config.prompts_dir || "Not set"}</span>
         <span class="meta">Favorites: {config.favorites.length}</span>
+        <span class="filter-chip" class:active={showFavorites}>
+          {showFavorites ? "Favorites filter" : "All prompts"}
+        </span>
       </div>
       <div class="actions">
         <button class="ghost" type="button" onclick={chooseFolder}>
@@ -691,6 +694,22 @@
 .meta {
   font-size: 12px;
   color: #607063;
+}
+
+.filter-chip {
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(87, 107, 95, 0.3);
+  color: #5b6a60;
+  width: fit-content;
+}
+
+.filter-chip.active {
+  background: rgba(221, 243, 232, 0.75);
+  border-color: rgba(61, 108, 90, 0.6);
+  color: #2d6a57;
 }
 
 .actions {
