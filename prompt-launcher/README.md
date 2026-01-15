@@ -20,6 +20,7 @@ Minimal Windows prompt manager that stays local, is file driven, and pastes into
 - Favorite toggle shortcut: Ctrl+Shift+F
 - Favorites count displayed in the header
 - Favorites section pinned at the top of the list
+- Improved fuzzy ranking with term and boundary scoring
 
 ## Quickstart
 

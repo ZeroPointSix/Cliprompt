@@ -24,7 +24,7 @@ pub fn search_prompts(
         return prompts.iter().take(limit).cloned().collect();
     }
 
-    let (tags, query_text) = split_query(&trimmed);
+    let (tags, terms) = split_query(&trimmed);
     let mut results: Vec<(i32, PromptEntry)> = Vec::new();
 
     for prompt in prompts {
@@ -32,10 +32,10 @@ pub fn search_prompts(
             continue;
         }
 
-        let score = if query_text.is_empty() {
+        let score = if terms.is_empty() {
             Some(0)
         } else {
-            score_prompt(prompt, &query_text)
+            score_prompt(prompt, &terms)
         };
 
         if let Some(score) = score {
@@ -168,7 +168,7 @@ fn normalize_tag(raw: &str) -> Option<String> {
     }
 }
 
-fn split_query(query: &str) -> (Vec<String>, String) {
+fn split_query(query: &str) -> (Vec<String>, Vec<String>) {
     let mut tags = Vec::new();
     let mut terms = Vec::new();
 
@@ -182,14 +182,14 @@ fn split_query(query: &str) -> (Vec<String>, String) {
         }
     }
 
-    (tags, terms.join(" "))
+    (tags, terms)
 }
 
 fn tags_match(prompt: &PromptEntry, tags: &[String]) -> bool {
     tags.iter().all(|tag| prompt.tags.iter().any(|t| t == tag))
 }
 
-fn score_prompt(prompt: &PromptEntry, query: &str) -> Option<i32> {
+fn score_prompt(prompt: &PromptEntry, terms: &[String]) -> Option<i32> {
     let tag_text = prompt.tags.join(" ").to_lowercase();
     let title_text = prompt.title.to_lowercase();
     let full_text = format!(
@@ -198,30 +198,45 @@ fn score_prompt(prompt: &PromptEntry, query: &str) -> Option<i32> {
     )
     .to_lowercase();
 
-    let mut best = score_match(&full_text, query)?;
-    if let Some(score) = score_match(&title_text, query) {
+    let mut best = score_terms(&full_text, terms)?;
+    if let Some(score) = score_terms(&title_text, terms) {
         best = best.min(score - 120);
     }
-    if let Some(score) = score_match(&tag_text, query) {
+    if let Some(score) = score_terms(&tag_text, terms) {
         best = best.min(score - 80);
     }
     Some(best)
 }
 
-fn score_match(text: &str, query: &str) -> Option<i32> {
-    if query.is_empty() {
+fn score_terms(text: &str, terms: &[String]) -> Option<i32> {
+    let mut total = 0;
+    for term in terms {
+        total += score_match(text, term)?;
+    }
+    Some(total)
+}
+
+fn score_match(text: &str, term: &str) -> Option<i32> {
+    if term.is_empty() {
         return Some(0);
     }
 
     let mut score: i32 = 0;
-    if let Some(index) = text.find(query) {
-        score -= 200 + index as i32;
+    if let Some(best_index) = best_substring_index(text, term) {
+        score -= 200 + best_index as i32;
+        if is_word_boundary(text, best_index) {
+            score -= 30;
+        }
+        let end = best_index + term.len();
+        if is_word_boundary(text, end) {
+            score -= 10;
+        }
     }
 
     let mut last_pos: i32 = -1;
     let mut start = 0usize;
 
-    for ch in query.chars() {
+    for ch in term.chars() {
         let slice = &text[start..];
         let mut found = None;
         for (pos, candidate) in slice.char_indices() {
@@ -237,4 +252,35 @@ fn score_match(text: &str, query: &str) -> Option<i32> {
     }
 
     Some(score)
+}
+
+fn best_substring_index(text: &str, term: &str) -> Option<usize> {
+    let mut best: Option<usize> = None;
+    let mut start = 0usize;
+    while let Some(pos) = text[start..].find(term) {
+        let idx = start + pos;
+        best = Some(match best {
+            Some(current) => {
+                if idx < current {
+                    idx
+                } else {
+                    current
+                }
+            }
+            None => idx,
+        });
+        start = idx + 1;
+    }
+    best
+}
+
+fn is_word_boundary(text: &str, index: usize) -> bool {
+    if index == 0 || index >= text.len() {
+        return true;
+    }
+    let prev = text[..index].chars().last();
+    let next = text[index..].chars().next();
+    let prev_is_word = prev.map(|c| c.is_alphanumeric()).unwrap_or(false);
+    let next_is_word = next.map(|c| c.is_alphanumeric()).unwrap_or(false);
+    !prev_is_word || !next_is_word
 }

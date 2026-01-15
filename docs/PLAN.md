@@ -70,3 +70,8 @@
 
 - [x] Show a favorites section pinned at the top of the list.
 - [x] Run `npm run check` after code updates.
+
+## Iteration 14 (Fuzzy matcher)
+
+- [x] Improve Rust scoring with term matching and word-boundary bias.
+- [x] Run `npm run check` after code updates.
