@@ -65,3 +65,8 @@
 
 - [x] Show favorites count and active filter state in the header.
 - [x] Run `npm run check` after code updates.
+
+## Iteration 13 (Favorites section)
+
+- [x] Show a favorites section pinned at the top of the list.
+- [x] Run `npm run check` after code updates.

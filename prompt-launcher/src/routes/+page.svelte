@@ -48,6 +48,8 @@
 
   let filtered = $state<PromptEntry[]>([]);
   let activePrompt = $state<PromptEntry | null>(null);
+  let favoritesList = $state<{ prompt: PromptEntry; index: number }[]>([]);
+  let regularList = $state<{ prompt: PromptEntry; index: number }[]>([]);
   let searchTimer: ReturnType<typeof setTimeout> | null = null;
   let searchToken = 0;
 
@@ -55,6 +57,17 @@
   let unlistenFocus: UnlistenFn | null = null;
 
   $effect(() => {
+    const favorites: { prompt: PromptEntry; index: number }[] = [];
+    const regular: { prompt: PromptEntry; index: number }[] = [];
+    filtered.forEach((prompt, index) => {
+      if (isFavorite(prompt)) {
+        favorites.push({ prompt, index });
+      } else {
+        regular.push({ prompt, index });
+      }
+    });
+    favoritesList = favorites;
+    regularList = regular;
     activePrompt = filtered[selectedIndex] ?? null;
   });
 
@@ -365,6 +378,107 @@
             <span>No matches yet</span>
             <span class="hint">Try a tag like #sql</span>
           </div>
+        {:else if !showFavorites && favoritesList.length > 0}
+          <div class="section-label">Favorites</div>
+          {#each favoritesList as item (item.prompt.id)}
+            <div
+              class:selected={item.index === selectedIndex}
+              class="row"
+              style={`--i: ${item.index}`}
+              role="button"
+              tabindex="0"
+              onclick={() => (selectedIndex = item.index)}
+              ondblclick={() => usePrompt(item.prompt)}
+              onkeydown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  usePrompt(item.prompt);
+                }
+              }}
+              oncontextmenu={(event) => {
+                event.preventDefault();
+                openPrompt(item.prompt);
+              }}
+            >
+              <div class="row-title">
+                <div class="row-heading">
+                  <span>{item.prompt.title}</span>
+                  {#if item.prompt.tags?.length}
+                    <div class="tags">
+                      {#each item.prompt.tags as tag}
+                        <span class="tag">#{tag}</span>
+                      {/each}
+                    </div>
+                  {/if}
+                </div>
+                <div class="row-actions">
+                  <button
+                    class="fav-toggle"
+                    class:active={isFavorite(item.prompt)}
+                    type="button"
+                    aria-pressed={isFavorite(item.prompt)}
+                    onclick={(event) => {
+                      event.stopPropagation();
+                      toggleFavorite(item.prompt);
+                    }}
+                  >
+                    Fav
+                  </button>
+                </div>
+              </div>
+              <div class="row-preview">{item.prompt.preview}</div>
+            </div>
+          {/each}
+          <div class="section-label">All prompts</div>
+          {#each regularList as item (item.prompt.id)}
+            <div
+              class:selected={item.index === selectedIndex}
+              class="row"
+              style={`--i: ${item.index}`}
+              role="button"
+              tabindex="0"
+              onclick={() => (selectedIndex = item.index)}
+              ondblclick={() => usePrompt(item.prompt)}
+              onkeydown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  usePrompt(item.prompt);
+                }
+              }}
+              oncontextmenu={(event) => {
+                event.preventDefault();
+                openPrompt(item.prompt);
+              }}
+            >
+              <div class="row-title">
+                <div class="row-heading">
+                  <span>{item.prompt.title}</span>
+                  {#if item.prompt.tags?.length}
+                    <div class="tags">
+                      {#each item.prompt.tags as tag}
+                        <span class="tag">#{tag}</span>
+                      {/each}
+                    </div>
+                  {/if}
+                </div>
+                <div class="row-actions">
+                  <button
+                    class="fav-toggle"
+                    class:active={isFavorite(item.prompt)}
+                    type="button"
+                    aria-pressed={isFavorite(item.prompt)}
+                    onclick={(event) => {
+                      event.stopPropagation();
+                      toggleFavorite(item.prompt);
+                    }}
+                  >
+                    Fav
+                  </button>
+                </div>
+              </div>
+              <div class="row-preview">{item.prompt.preview}</div>
+            </div>
+          {/each}
         {:else}
           {#each filtered as prompt, index (prompt.id)}
             <div
@@ -692,6 +806,14 @@
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+.section-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #708075;
+  padding: 4px 8px 2px;
 }
 
 .row-preview {
