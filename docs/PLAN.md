@@ -105,3 +105,8 @@
 
 - [x] Add a shortcut to clear recent history.
 - [x] Run `npm run check` after code updates.
+
+## Iteration 21 (Recent toggle shortcut)
+
+- [x] Add a shortcut to toggle the recent filter.
+- [x] Run `npm run check` after code updates.

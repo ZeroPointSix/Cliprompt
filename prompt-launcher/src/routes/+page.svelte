@@ -407,6 +407,16 @@
       status = "Recent cleared";
       return;
     }
+    if (
+      event.ctrlKey &&
+      event.shiftKey &&
+      event.key.toLowerCase() === "e"
+    ) {
+      event.preventDefault();
+      toggleRecentFilter();
+      status = showRecent ? "Recent filter off" : "Recent filter on";
+      return;
+    }
     if (filtered.length === 0) {
       if (event.key === "Escape") {
         event.preventDefault();
@@ -778,7 +788,7 @@
         {:else if status}
           <span>{status}</span>
         {:else}
-          <span>Enter to paste, right click to open, Ctrl+Shift+F to favorite, Ctrl+Shift+R to clear recent</span>
+          <span>Enter to paste, right click to open, Ctrl+Shift+F to favorite, Ctrl+Shift+R to clear recent, Ctrl+Shift+E to toggle recent</span>
         {/if}
       </div>
     </footer>
@@ -804,7 +814,7 @@
         </div>
         <div class="settings-row">
           <span class="settings-label">Recent</span>
-          <span>Use the Recent toggle to enable/disable tracking (Ctrl+Shift+R clears)</span>
+          <span>Use the Recent toggle to enable/disable tracking (Ctrl+Shift+R clears, Ctrl+Shift+E toggles)</span>
           <button class="ghost tiny" type="button" onclick={clearRecent}>
             Clear
           </button>

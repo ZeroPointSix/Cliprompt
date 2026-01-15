@@ -26,3 +26,4 @@
 - Added recent filter, enable toggle, and clear action.
 - Added matched snippets in list rows when searching.
 - Added a Ctrl+Shift+R shortcut to clear recent history.
+- Added a Ctrl+Shift+E shortcut to toggle the recent filter.
