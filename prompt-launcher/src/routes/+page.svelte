@@ -22,6 +22,7 @@
     auto_paste: boolean;
     hotkey: string;
     auto_start: boolean;
+    favorites: string[];
   };
 
   const appWindow = getCurrentWindow();
@@ -33,7 +34,8 @@
     prompts_dir: "",
     auto_paste: true,
     hotkey: "Alt+Space",
-    auto_start: false
+    auto_start: false,
+    favorites: []
   });
   let selectedIndex = $state<number>(0);
   let status = $state<string>("");
@@ -41,6 +43,7 @@
   let hotkeyError = $state<string>("");
   let settingsError = $state<string>("");
   let showSettings = $state<boolean>(false);
+  let showFavorites = $state<boolean>(false);
   let currentHotkey = "";
 
   let filtered = $state<PromptEntry[]>([]);
@@ -168,6 +171,25 @@
     }
   }
 
+  async function toggleFavorite(prompt: PromptEntry | null | undefined) {
+    if (!prompt) {
+      return;
+    }
+    const favorites = await invoke<string[]>("toggle_favorite", { id: prompt.id });
+    config = { ...config, favorites: favorites ?? [] };
+    void refreshResults();
+  }
+
+  function isFavorite(prompt: PromptEntry) {
+    return config.favorites.includes(prompt.id);
+  }
+
+  function toggleFavoritesFilter() {
+    showFavorites = !showFavorites;
+    selectedIndex = 0;
+    void refreshResults();
+  }
+
   async function usePrompt(prompt: PromptEntry | null | undefined) {
     if (!prompt) {
       return;
@@ -263,7 +285,8 @@
     const token = ++searchToken;
     const results = await invoke<PromptEntry[]>("search_prompts", {
       query,
-      limit: maxResults
+      limit: maxResults,
+      favoritesOnly: showFavorites
     });
     if (token !== searchToken) {
       return;
@@ -290,6 +313,9 @@
         </button>
         <button class="ghost" type="button" onclick={openFolder}>
           Open Folder
+        </button>
+        <button class="ghost" type="button" onclick={toggleFavoritesFilter}>
+          {showFavorites ? "All prompts" : "Favorites"}
         </button>
         <label class="toggle">
           <input type="checkbox" checked={config.auto_paste} onchange={toggleAutoPaste} />
@@ -324,30 +350,53 @@
           </div>
         {:else}
           {#each filtered as prompt, index (prompt.id)}
-            <button
+            <div
               class:selected={index === selectedIndex}
               class="row"
               style={`--i: ${index}`}
+              role="button"
+              tabindex="0"
               onclick={() => (selectedIndex = index)}
               ondblclick={() => usePrompt(prompt)}
+              onkeydown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  usePrompt(prompt);
+                }
+              }}
               oncontextmenu={(event) => {
                 event.preventDefault();
                 openPrompt(prompt);
               }}
-              type="button"
             >
               <div class="row-title">
-                <span>{prompt.title}</span>
-                {#if prompt.tags?.length}
-                  <div class="tags">
-                    {#each prompt.tags as tag}
-                      <span class="tag">#{tag}</span>
-                    {/each}
-                  </div>
-                {/if}
+                <div class="row-heading">
+                  <span>{prompt.title}</span>
+                  {#if prompt.tags?.length}
+                    <div class="tags">
+                      {#each prompt.tags as tag}
+                        <span class="tag">#{tag}</span>
+                      {/each}
+                    </div>
+                  {/if}
+                </div>
+                <div class="row-actions">
+                  <button
+                    class="fav-toggle"
+                    class:active={isFavorite(prompt)}
+                    type="button"
+                    aria-pressed={isFavorite(prompt)}
+                    onclick={(event) => {
+                      event.stopPropagation();
+                      toggleFavorite(prompt);
+                    }}
+                  >
+                    Fav
+                  </button>
+                </div>
               </div>
               <div class="row-preview">{prompt.preview}</div>
-            </button>
+            </div>
           {/each}
         {/if}
       </div>
@@ -600,9 +649,22 @@
 .row-title {
   display: flex;
   justify-content: space-between;
-  gap: 8px;
+  gap: 12px;
   font-weight: 600;
   font-size: 14px;
+}
+
+.row-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.row-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .row-preview {
@@ -623,6 +685,27 @@
   color: #3e6b5b;
   padding: 2px 6px;
   border-radius: 999px;
+}
+
+.fav-toggle {
+  border: 1px solid rgba(87, 107, 95, 0.4);
+  background: transparent;
+  color: #375046;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.fav-toggle.active {
+  background: rgba(221, 243, 232, 0.9);
+  border-color: rgba(61, 108, 90, 0.6);
+  color: #2d6a57;
+}
+
+.fav-toggle:hover {
+  transform: none;
+  box-shadow: none;
 }
 
 .preview {

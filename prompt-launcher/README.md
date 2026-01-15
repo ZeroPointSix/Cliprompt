@@ -16,6 +16,7 @@ Minimal Windows prompt manager that stays local, is file driven, and pastes into
 - Copy-only quick action in preview
 - Copy-title action for snippet titles
 - Compact settings drawer with hotkey guidance
+- Favorites toggle with quick filter
 
 ## Quickstart
 

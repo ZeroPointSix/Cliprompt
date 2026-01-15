@@ -50,3 +50,8 @@
 
 - [x] Add a compact settings drawer with hotkey guidance and status.
 - [x] Run `npm run check` after code updates.
+
+## Iteration 10 (Favorites)
+
+- [x] Add a favorites toggle per prompt and a favorites-only filter.
+- [x] Run `npm run check` after code updates.

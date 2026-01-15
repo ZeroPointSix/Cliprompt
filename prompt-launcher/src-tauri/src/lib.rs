@@ -4,6 +4,7 @@ mod prompts;
 mod win;
 
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
+use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, RwLock};
@@ -51,8 +52,19 @@ fn search_prompts(
     state: State<Arc<AppState>>,
     query: String,
     limit: usize,
+    favorites_only: bool,
 ) -> Vec<PromptEntry> {
     let prompts = state.prompts.read().unwrap();
+    if favorites_only {
+        let favorites = state.config.lock().unwrap().favorites.clone();
+        let favorites: HashSet<String> = favorites.into_iter().collect();
+        let filtered: Vec<PromptEntry> = prompts
+            .iter()
+            .filter(|prompt| favorites.contains(&prompt.id))
+            .cloned()
+            .collect();
+        return search_prompts_impl(&filtered, &query, limit);
+    }
     search_prompts_impl(&prompts, &query, limit)
 }
 
@@ -112,6 +124,22 @@ fn set_auto_start(
     let mut config = state.config.lock().unwrap();
     config.auto_start = auto_start;
     save(&app, &config)
+}
+
+#[tauri::command]
+fn toggle_favorite(
+    app: AppHandle,
+    state: State<Arc<AppState>>,
+    id: String,
+) -> Result<Vec<String>, String> {
+    let mut config = state.config.lock().unwrap();
+    if let Some(pos) = config.favorites.iter().position(|item| item == &id) {
+        config.favorites.remove(pos);
+    } else {
+        config.favorites.push(id);
+    }
+    save(&app, &config)?;
+    Ok(config.favorites.clone())
 }
 
 #[tauri::command]
@@ -339,6 +367,7 @@ pub fn run() {
             set_auto_paste,
             set_hotkey,
             set_auto_start,
+            toggle_favorite,
             capture_active_window,
             focus_last_window
         ])

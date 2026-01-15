@@ -15,3 +15,4 @@
 - Added a copy-only quick action in the preview panel.
 - Added a copy-title action for quick snippet reuse.
 - Added a compact settings drawer with hotkey guidance and status.
+- Added favorites toggles with a favorites-only filter.
