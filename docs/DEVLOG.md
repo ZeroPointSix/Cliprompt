@@ -8,3 +8,4 @@
 - Expanded search to include prompt bodies and added quick open for the prompts folder.
 - Added `docs/PLAN.md` to track iteration scope.
 - Added folder-name tags and seeded example prompts when the folder is empty.
+- Added a tray menu (show/hide/quit) with click-to-toggle behavior.

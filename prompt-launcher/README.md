@@ -10,6 +10,7 @@ Minimal Windows prompt manager that stays local, is file driven, and pastes into
 - Folder watcher for hot reload
 - Right click to open source file
 - Quick open for the prompts folder
+- Tray menu with show/hide/quit
 
 ## Quickstart
 

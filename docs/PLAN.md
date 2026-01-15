@@ -12,3 +12,9 @@
 - [x] Add directory tags from folder names.
 - [x] Seed sample prompts when the folder is empty.
 - [x] Run `npm run check` after code updates.
+
+## Iteration 3 (Tray integration)
+
+- [x] Add a system tray menu with show/hide/quit.
+- [x] Toggle window on tray click while capturing active focus.
+- [x] Run `npm run check` after code updates.

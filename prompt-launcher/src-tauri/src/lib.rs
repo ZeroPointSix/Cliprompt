@@ -8,7 +8,11 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread;
 use std::time::Duration;
-use tauri::{AppHandle, Manager, State};
+use tauri::{
+    menu::{Menu, MenuItem},
+    tray::{TrayIconBuilder, TrayIconEvent},
+    AppHandle, Manager, State,
+};
 
 use config::{load_or_init, save, AppConfig};
 use prompts::{index_prompts, PromptEntry};
@@ -85,12 +89,7 @@ fn set_hotkey(
 
 #[tauri::command]
 fn capture_active_window(state: State<Arc<AppState>>) -> Result<(), String> {
-    if let Some(hwnd) = win::capture_foreground_window() {
-        *state.last_active_hwnd.lock().unwrap() = Some(hwnd);
-        Ok(())
-    } else {
-        Err("no active window detected".to_string())
-    }
+    store_active_window(state.inner())
 }
 
 #[tauri::command]
@@ -114,6 +113,96 @@ fn refresh_prompts(state: &Arc<AppState>, dir: &Path) -> Vec<PromptEntry> {
     let mut lock = state.prompts.write().unwrap();
     *lock = prompts.clone();
     prompts
+}
+
+fn store_active_window(state: &Arc<AppState>) -> Result<(), String> {
+    if let Some(hwnd) = win::capture_foreground_window() {
+        *state.last_active_hwnd.lock().unwrap() = Some(hwnd);
+        Ok(())
+    } else {
+        Err("no active window detected".to_string())
+    }
+}
+
+fn main_window(app: &AppHandle) -> Result<tauri::WebviewWindow, String> {
+    app.get_webview_window("main")
+        .ok_or_else(|| "main window not found".to_string())
+}
+
+fn show_main_window(app: &AppHandle) -> Result<(), String> {
+    let window = main_window(app)?;
+    window
+        .show()
+        .map_err(|e| format!("show window failed: {e}"))?;
+    window
+        .set_focus()
+        .map_err(|e| format!("focus window failed: {e}"))?;
+    Ok(())
+}
+
+fn hide_main_window(app: &AppHandle) -> Result<(), String> {
+    let window = main_window(app)?;
+    window
+        .hide()
+        .map_err(|e| format!("hide window failed: {e}"))?;
+    Ok(())
+}
+
+fn toggle_main_window(app: &AppHandle) -> Result<(), String> {
+    let window = main_window(app)?;
+    let visible = window
+        .is_visible()
+        .map_err(|e| format!("query window failed: {e}"))?;
+    if visible {
+        hide_main_window(app)
+    } else {
+        show_main_window(app)
+    }
+}
+
+fn init_tray(app: &tauri::App) -> Result<(), String> {
+    let show = MenuItem::with_id(app, "show", "Show", true, None)
+        .map_err(|e| format!("menu item failed: {e}"))?;
+    let hide = MenuItem::with_id(app, "hide", "Hide", true, None)
+        .map_err(|e| format!("menu item failed: {e}"))?;
+    let quit = MenuItem::with_id(app, "quit", "Quit", true, None)
+        .map_err(|e| format!("menu item failed: {e}"))?;
+    let menu = Menu::with_items(app, &[&show, &hide, &quit])
+        .map_err(|e| format!("menu build failed: {e}"))?;
+    let icon = app
+        .default_window_icon()
+        .cloned()
+        .ok_or_else(|| "missing default window icon".to_string())?;
+
+    TrayIconBuilder::new()
+        .icon(icon)
+        .menu(&menu)
+        .on_menu_event(|app, event| match event.id().as_ref() {
+            "show" => {
+                let state = app.state::<Arc<AppState>>();
+                let _ = store_active_window(state.inner());
+                let _ = show_main_window(app);
+            }
+            "hide" => {
+                let _ = hide_main_window(app);
+            }
+            "quit" => {
+                app.exit(0);
+            }
+            _ => {}
+        })
+        .on_tray_icon_event(|tray, event| {
+            if matches!(event, TrayIconEvent::Click { .. }) {
+                let app = tray.app_handle();
+                let state = app.state::<Arc<AppState>>();
+                let _ = store_active_window(state.inner());
+                let _ = toggle_main_window(&app);
+            }
+        })
+        .build(app)
+        .map_err(|e| format!("tray init failed: {e}"))?;
+
+    Ok(())
 }
 
 fn seed_prompts_if_empty(dir: &Path) -> Result<(), String> {
@@ -205,6 +294,8 @@ pub fn run() {
             }
 
             app.manage(state.clone());
+            init_tray(app)
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
             start_watcher(handle.clone(), state, dir)
                 .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
 
