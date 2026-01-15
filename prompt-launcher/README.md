@@ -15,6 +15,7 @@ Minimal Windows prompt manager that stays local, is file driven, and pastes into
 - Rust-side fuzzy ranking for large prompt sets
 - Copy-only quick action in preview
 - Copy-title action for snippet titles
+- Compact settings drawer with hotkey guidance
 
 ## Quickstart
 

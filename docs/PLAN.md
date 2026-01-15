@@ -45,3 +45,8 @@
 
 - [x] Add a copy-title quick action in the preview pane.
 - [x] Run `npm run check` after code updates.
+
+## Iteration 9 (Settings drawer)
+
+- [x] Add a compact settings drawer with hotkey guidance and status.
+- [x] Run `npm run check` after code updates.

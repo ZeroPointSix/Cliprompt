@@ -40,6 +40,7 @@
   let hotkeyDraft = $state<string>("");
   let hotkeyError = $state<string>("");
   let settingsError = $state<string>("");
+  let showSettings = $state<boolean>(false);
   let currentHotkey = "";
 
   let filtered = $state<PromptEntry[]>([]);
@@ -207,6 +208,10 @@
       return;
     }
     await openPath(config.prompts_dir);
+  }
+
+  function toggleSettings() {
+    showSettings = !showSettings;
   }
 
   function onSearchInput(event: Event) {
@@ -378,6 +383,9 @@
         <span>Change hotkey</span>
         <input class="hotkey-input" bind:value={hotkeyDraft} />
         <button type="button" onclick={applyHotkey}>Apply</button>
+        <button class="ghost" type="button" onclick={toggleSettings}>
+          {showSettings ? "Hide settings" : "Settings"}
+        </button>
       </div>
       <div class="status">
         {#if hotkeyError}
@@ -391,6 +399,29 @@
         {/if}
       </div>
     </footer>
+
+    {#if showSettings}
+      <section class="settings">
+        <div class="settings-title">Settings info</div>
+        <div class="settings-row">
+          <span class="settings-label">Hotkey format</span>
+          <span>Use modifiers like Ctrl, Alt, Shift. Example: Ctrl+Shift+P</span>
+        </div>
+        <div class="settings-row">
+          <span class="settings-label">Current hotkey</span>
+          <span>{config.hotkey}</span>
+        </div>
+        <div class="settings-row">
+          <span class="settings-label">Auto start</span>
+          <span>{config.auto_start ? "Enabled" : "Disabled"}</span>
+        </div>
+        {#if hotkeyError}
+          <div class="settings-row error">{hotkeyError}</div>
+        {:else if settingsError}
+          <div class="settings-row error">{settingsError}</div>
+        {/if}
+      </section>
+    {/if}
   </section>
 </main>
 
@@ -631,6 +662,45 @@
   gap: 16px;
   position: relative;
   z-index: 1;
+}
+
+.settings {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.65);
+  border: 1px solid rgba(134, 157, 140, 0.25);
+  position: relative;
+  z-index: 1;
+}
+
+.settings-title {
+  font-weight: 600;
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+
+.settings-row {
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+  color: #5b6a60;
+  margin-bottom: 6px;
+}
+
+.settings-row:last-child {
+  margin-bottom: 0;
+}
+
+.settings-label {
+  min-width: 110px;
+  color: #3f5146;
+  font-weight: 600;
+}
+
+.settings-row.error {
+  color: #a34f3b;
+  font-weight: 600;
 }
 
 .hotkey {

@@ -14,3 +14,4 @@
 - Added UI feedback when auto-start registration fails.
 - Added a copy-only quick action in the preview panel.
 - Added a copy-title action for quick snippet reuse.
+- Added a compact settings drawer with hotkey guidance and status.
