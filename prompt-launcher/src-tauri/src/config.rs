@@ -12,6 +12,8 @@ pub struct AppConfig {
     pub auto_start: bool,
     #[serde(default)]
     pub favorites: Vec<String>,
+    #[serde(default)]
+    pub recent_ids: Vec<String>,
 }
 
 impl Default for AppConfig {
@@ -22,6 +24,7 @@ impl Default for AppConfig {
             hotkey: "Alt+Space".to_string(),
             auto_start: false,
             favorites: Vec::new(),
+            recent_ids: Vec::new(),
         }
     }
 }

@@ -143,6 +143,22 @@ fn toggle_favorite(
 }
 
 #[tauri::command]
+fn push_recent(
+    app: AppHandle,
+    state: State<Arc<AppState>>,
+    id: String,
+) -> Result<Vec<String>, String> {
+    let mut config = state.config.lock().unwrap();
+    config.recent_ids.retain(|item| item != &id);
+    config.recent_ids.insert(0, id);
+    if config.recent_ids.len() > 20 {
+        config.recent_ids.truncate(20);
+    }
+    save(&app, &config)?;
+    Ok(config.recent_ids.clone())
+}
+
+#[tauri::command]
 fn capture_active_window(state: State<Arc<AppState>>) -> Result<(), String> {
     store_active_window(state.inner())
 }
@@ -368,6 +384,7 @@ pub fn run() {
             set_hotkey,
             set_auto_start,
             toggle_favorite,
+            push_recent,
             capture_active_window,
             focus_last_window
         ])

@@ -85,3 +85,8 @@
 
 - [x] Add a copy-path action in the preview pane.
 - [x] Run `npm run check` after code updates.
+
+## Iteration 17 (Recent prompts)
+
+- [x] Track recently used prompts and show a recent section.
+- [x] Run `npm run check` after code updates.

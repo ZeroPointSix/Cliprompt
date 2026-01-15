@@ -22,3 +22,4 @@
 - Improved fuzzy ranking with term matching and word-boundary bias.
 - Added a filter mode chip in the header.
 - Added a copy-path action for prompt files.
+- Added a recent section and persisted recently used prompts.

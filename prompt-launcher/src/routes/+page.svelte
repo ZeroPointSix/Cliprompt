@@ -23,6 +23,7 @@
     hotkey: string;
     auto_start: boolean;
     favorites: string[];
+    recent_ids: string[];
   };
 
   const appWindow = getCurrentWindow();
@@ -35,7 +36,8 @@
     auto_paste: true,
     hotkey: "Alt+Space",
     auto_start: false,
-    favorites: []
+    favorites: [],
+    recent_ids: []
   });
   let selectedIndex = $state<number>(0);
   let status = $state<string>("");
@@ -48,6 +50,7 @@
 
   let filtered = $state<PromptEntry[]>([]);
   let activePrompt = $state<PromptEntry | null>(null);
+  let recentList = $state<{ prompt: PromptEntry; index: number }[]>([]);
   let favoritesList = $state<{ prompt: PromptEntry; index: number }[]>([]);
   let regularList = $state<{ prompt: PromptEntry; index: number }[]>([]);
   let searchTimer: ReturnType<typeof setTimeout> | null = null;
@@ -57,15 +60,21 @@
   let unlistenFocus: UnlistenFn | null = null;
 
   $effect(() => {
+    const recent = buildRecentList(filtered, config.recent_ids);
+    const recentIds = new Set(recent.map((item) => item.prompt.id));
     const favorites: { prompt: PromptEntry; index: number }[] = [];
     const regular: { prompt: PromptEntry; index: number }[] = [];
     filtered.forEach((prompt, index) => {
+      if (recentIds.has(prompt.id)) {
+        return;
+      }
       if (isFavorite(prompt)) {
         favorites.push({ prompt, index });
       } else {
         regular.push({ prompt, index });
       }
     });
+    recentList = recent;
     favoritesList = favorites;
     regularList = regular;
     activePrompt = filtered[selectedIndex] ?? null;
@@ -204,10 +213,29 @@
     return config.favorites.includes(prompt.id);
   }
 
+  function buildRecentList(prompts: PromptEntry[], recentIds: string[]) {
+    const map = new Map(
+      prompts.map((prompt, index) => [prompt.id, { prompt, index }])
+    );
+    const results: { prompt: PromptEntry; index: number }[] = [];
+    for (const id of recentIds) {
+      const entry = map.get(id);
+      if (entry) {
+        results.push(entry);
+      }
+    }
+    return results;
+  }
+
   function toggleFavoritesFilter() {
     showFavorites = !showFavorites;
     selectedIndex = 0;
     void refreshResults();
+  }
+
+  async function markRecent(prompt: PromptEntry) {
+    const recentIds = await invoke<string[]>("push_recent", { id: prompt.id });
+    config = { ...config, recent_ids: recentIds ?? [] };
   }
 
   async function usePrompt(prompt: PromptEntry | null | undefined) {
@@ -217,6 +245,7 @@
     await appWindow.hide();
     await writeText(prompt.body);
     await invoke("focus_last_window", { autoPaste: config.auto_paste });
+    await markRecent(prompt);
     query = "";
     selectedIndex = 0;
     void refreshResults();
@@ -227,6 +256,7 @@
       return;
     }
     await writeText(prompt.body);
+    await markRecent(prompt);
     status = "Copied to clipboard";
   }
 
@@ -235,6 +265,7 @@
       return;
     }
     await writeText(prompt.title);
+    await markRecent(prompt);
     status = "Title copied";
   }
 
@@ -243,6 +274,7 @@
       return;
     }
     await writeText(prompt.path);
+    await markRecent(prompt);
     status = "Path copied";
   }
 
@@ -389,107 +421,163 @@
             <span>No matches yet</span>
             <span class="hint">Try a tag like #sql</span>
           </div>
-        {:else if !showFavorites && favoritesList.length > 0}
-          <div class="section-label">Favorites</div>
-          {#each favoritesList as item (item.prompt.id)}
-            <div
-              class:selected={item.index === selectedIndex}
-              class="row"
-              style={`--i: ${item.index}`}
-              role="button"
-              tabindex="0"
-              onclick={() => (selectedIndex = item.index)}
-              ondblclick={() => usePrompt(item.prompt)}
-              onkeydown={(event) => {
-                if (event.key === "Enter" || event.key === " ") {
+        {:else if !showFavorites && (recentList.length > 0 || favoritesList.length > 0)}
+          {#if recentList.length > 0}
+            <div class="section-label">Recent</div>
+            {#each recentList as item (item.prompt.id)}
+              <div
+                class:selected={item.index === selectedIndex}
+                class="row"
+                style={`--i: ${item.index}`}
+                role="button"
+                tabindex="0"
+                onclick={() => (selectedIndex = item.index)}
+                ondblclick={() => usePrompt(item.prompt)}
+                onkeydown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    usePrompt(item.prompt);
+                  }
+                }}
+                oncontextmenu={(event) => {
                   event.preventDefault();
-                  usePrompt(item.prompt);
-                }
-              }}
-              oncontextmenu={(event) => {
-                event.preventDefault();
-                openPrompt(item.prompt);
-              }}
-            >
-              <div class="row-title">
-                <div class="row-heading">
-                  <span>{item.prompt.title}</span>
-                  {#if item.prompt.tags?.length}
-                    <div class="tags">
-                      {#each item.prompt.tags as tag}
-                        <span class="tag">#{tag}</span>
-                      {/each}
-                    </div>
-                  {/if}
+                  openPrompt(item.prompt);
+                }}
+              >
+                <div class="row-title">
+                  <div class="row-heading">
+                    <span>{item.prompt.title}</span>
+                    {#if item.prompt.tags?.length}
+                      <div class="tags">
+                        {#each item.prompt.tags as tag}
+                          <span class="tag">#{tag}</span>
+                        {/each}
+                      </div>
+                    {/if}
+                  </div>
+                  <div class="row-actions">
+                    <button
+                      class="fav-toggle"
+                      class:active={isFavorite(item.prompt)}
+                      type="button"
+                      aria-pressed={isFavorite(item.prompt)}
+                      onclick={(event) => {
+                        event.stopPropagation();
+                        toggleFavorite(item.prompt);
+                      }}
+                    >
+                      Fav
+                    </button>
+                  </div>
                 </div>
-                <div class="row-actions">
-                  <button
-                    class="fav-toggle"
-                    class:active={isFavorite(item.prompt)}
-                    type="button"
-                    aria-pressed={isFavorite(item.prompt)}
-                    onclick={(event) => {
-                      event.stopPropagation();
-                      toggleFavorite(item.prompt);
-                    }}
-                  >
-                    Fav
-                  </button>
-                </div>
+                <div class="row-preview">{item.prompt.preview}</div>
               </div>
-              <div class="row-preview">{item.prompt.preview}</div>
-            </div>
-          {/each}
-          <div class="section-label">All prompts</div>
-          {#each regularList as item (item.prompt.id)}
-            <div
-              class:selected={item.index === selectedIndex}
-              class="row"
-              style={`--i: ${item.index}`}
-              role="button"
-              tabindex="0"
-              onclick={() => (selectedIndex = item.index)}
-              ondblclick={() => usePrompt(item.prompt)}
-              onkeydown={(event) => {
-                if (event.key === "Enter" || event.key === " ") {
+            {/each}
+          {/if}
+          {#if favoritesList.length > 0}
+            <div class="section-label">Favorites</div>
+            {#each favoritesList as item (item.prompt.id)}
+              <div
+                class:selected={item.index === selectedIndex}
+                class="row"
+                style={`--i: ${item.index}`}
+                role="button"
+                tabindex="0"
+                onclick={() => (selectedIndex = item.index)}
+                ondblclick={() => usePrompt(item.prompt)}
+                onkeydown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    usePrompt(item.prompt);
+                  }
+                }}
+                oncontextmenu={(event) => {
                   event.preventDefault();
-                  usePrompt(item.prompt);
-                }
-              }}
-              oncontextmenu={(event) => {
-                event.preventDefault();
-                openPrompt(item.prompt);
-              }}
-            >
-              <div class="row-title">
-                <div class="row-heading">
-                  <span>{item.prompt.title}</span>
-                  {#if item.prompt.tags?.length}
-                    <div class="tags">
-                      {#each item.prompt.tags as tag}
-                        <span class="tag">#{tag}</span>
-                      {/each}
-                    </div>
-                  {/if}
+                  openPrompt(item.prompt);
+                }}
+              >
+                <div class="row-title">
+                  <div class="row-heading">
+                    <span>{item.prompt.title}</span>
+                    {#if item.prompt.tags?.length}
+                      <div class="tags">
+                        {#each item.prompt.tags as tag}
+                          <span class="tag">#{tag}</span>
+                        {/each}
+                      </div>
+                    {/if}
+                  </div>
+                  <div class="row-actions">
+                    <button
+                      class="fav-toggle"
+                      class:active={isFavorite(item.prompt)}
+                      type="button"
+                      aria-pressed={isFavorite(item.prompt)}
+                      onclick={(event) => {
+                        event.stopPropagation();
+                        toggleFavorite(item.prompt);
+                      }}
+                    >
+                      Fav
+                    </button>
+                  </div>
                 </div>
-                <div class="row-actions">
-                  <button
-                    class="fav-toggle"
-                    class:active={isFavorite(item.prompt)}
-                    type="button"
-                    aria-pressed={isFavorite(item.prompt)}
-                    onclick={(event) => {
-                      event.stopPropagation();
-                      toggleFavorite(item.prompt);
-                    }}
-                  >
-                    Fav
-                  </button>
-                </div>
+                <div class="row-preview">{item.prompt.preview}</div>
               </div>
-              <div class="row-preview">{item.prompt.preview}</div>
-            </div>
-          {/each}
+            {/each}
+          {/if}
+          {#if regularList.length > 0}
+            <div class="section-label">All prompts</div>
+            {#each regularList as item (item.prompt.id)}
+              <div
+                class:selected={item.index === selectedIndex}
+                class="row"
+                style={`--i: ${item.index}`}
+                role="button"
+                tabindex="0"
+                onclick={() => (selectedIndex = item.index)}
+                ondblclick={() => usePrompt(item.prompt)}
+                onkeydown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    usePrompt(item.prompt);
+                  }
+                }}
+                oncontextmenu={(event) => {
+                  event.preventDefault();
+                  openPrompt(item.prompt);
+                }}
+              >
+                <div class="row-title">
+                  <div class="row-heading">
+                    <span>{item.prompt.title}</span>
+                    {#if item.prompt.tags?.length}
+                      <div class="tags">
+                        {#each item.prompt.tags as tag}
+                          <span class="tag">#{tag}</span>
+                        {/each}
+                      </div>
+                    {/if}
+                  </div>
+                  <div class="row-actions">
+                    <button
+                      class="fav-toggle"
+                      class:active={isFavorite(item.prompt)}
+                      type="button"
+                      aria-pressed={isFavorite(item.prompt)}
+                      onclick={(event) => {
+                        event.stopPropagation();
+                        toggleFavorite(item.prompt);
+                      }}
+                    >
+                      Fav
+                    </button>
+                  </div>
+                </div>
+                <div class="row-preview">{item.prompt.preview}</div>
+              </div>
+            {/each}
+          {/if}
         {:else}
           {#each filtered as prompt, index (prompt.id)}
             <div
