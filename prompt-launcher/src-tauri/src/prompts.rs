@@ -14,6 +14,43 @@ pub struct PromptEntry {
     pub path: String,
 }
 
+pub fn search_prompts(
+    prompts: &[PromptEntry],
+    query: &str,
+    limit: usize,
+) -> Vec<PromptEntry> {
+    let trimmed = query.trim().to_lowercase();
+    if trimmed.is_empty() {
+        return prompts.iter().take(limit).cloned().collect();
+    }
+
+    let (tags, query_text) = split_query(&trimmed);
+    let mut results: Vec<(i32, PromptEntry)> = Vec::new();
+
+    for prompt in prompts {
+        if !tags.is_empty() && !tags_match(prompt, &tags) {
+            continue;
+        }
+
+        let score = if query_text.is_empty() {
+            Some(0)
+        } else {
+            score_prompt(prompt, &query_text)
+        };
+
+        if let Some(score) = score {
+            results.push((score, prompt.clone()));
+        }
+    }
+
+    results.sort_by_key(|(score, _)| *score);
+    results
+        .into_iter()
+        .take(limit)
+        .map(|(_, prompt)| prompt)
+        .collect()
+}
+
 pub fn index_prompts(dir: &Path) -> Vec<PromptEntry> {
     let mut entries = Vec::new();
     for entry in WalkDir::new(dir).follow_links(true).into_iter().flatten() {
@@ -129,4 +166,75 @@ fn normalize_tag(raw: &str) -> Option<String> {
     } else {
         Some(trimmed.to_ascii_lowercase())
     }
+}
+
+fn split_query(query: &str) -> (Vec<String>, String) {
+    let mut tags = Vec::new();
+    let mut terms = Vec::new();
+
+    for token in query.split_whitespace() {
+        if let Some(tag) = token.strip_prefix('#') {
+            if let Some(normalized) = normalize_tag(tag) {
+                tags.push(normalized);
+            }
+        } else {
+            terms.push(token);
+        }
+    }
+
+    (tags, terms.join(" "))
+}
+
+fn tags_match(prompt: &PromptEntry, tags: &[String]) -> bool {
+    tags.iter().all(|tag| prompt.tags.iter().any(|t| t == tag))
+}
+
+fn score_prompt(prompt: &PromptEntry, query: &str) -> Option<i32> {
+    let tag_text = prompt.tags.join(" ").to_lowercase();
+    let title_text = prompt.title.to_lowercase();
+    let full_text = format!(
+        "{} {} {} {}",
+        prompt.title, prompt.preview, prompt.body, tag_text
+    )
+    .to_lowercase();
+
+    let mut best = score_match(&full_text, query)?;
+    if let Some(score) = score_match(&title_text, query) {
+        best = best.min(score - 120);
+    }
+    if let Some(score) = score_match(&tag_text, query) {
+        best = best.min(score - 80);
+    }
+    Some(best)
+}
+
+fn score_match(text: &str, query: &str) -> Option<i32> {
+    if query.is_empty() {
+        return Some(0);
+    }
+
+    let mut score: i32 = 0;
+    if let Some(index) = text.find(query) {
+        score -= 200 + index as i32;
+    }
+
+    let mut last_pos: i32 = -1;
+    let mut start = 0usize;
+
+    for ch in query.chars() {
+        let slice = &text[start..];
+        let mut found = None;
+        for (pos, candidate) in slice.char_indices() {
+            if candidate == ch {
+                found = Some(start + pos);
+                break;
+            }
+        }
+        let next_index = found?;
+        score += next_index as i32 - last_pos;
+        last_pos = next_index as i32;
+        start = next_index + ch.len_utf8();
+    }
+
+    Some(score)
 }

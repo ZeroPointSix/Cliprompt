@@ -24,3 +24,9 @@
 - [x] Add start-with-Windows toggle in UI.
 - [x] Persist auto-start in config and apply to registry.
 - [x] Run `npm run check` after code updates.
+
+## Iteration 5 (Rust search)
+
+- [x] Move fuzzy ranking to Rust for large prompt sets.
+- [x] Query backend on input with simple debounce.
+- [x] Run `npm run check` after code updates.

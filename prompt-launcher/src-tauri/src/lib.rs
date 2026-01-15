@@ -16,7 +16,7 @@ use tauri::{
 };
 
 use config::{load_or_init, save, AppConfig};
-use prompts::{index_prompts, PromptEntry};
+use prompts::{index_prompts, search_prompts as search_prompts_impl, PromptEntry};
 
 struct AppState {
     prompts: RwLock<Vec<PromptEntry>>,
@@ -44,6 +44,16 @@ fn get_config(state: State<Arc<AppState>>) -> AppConfig {
 #[tauri::command]
 fn list_prompts(state: State<Arc<AppState>>) -> Vec<PromptEntry> {
     state.prompts.read().unwrap().clone()
+}
+
+#[tauri::command]
+fn search_prompts(
+    state: State<Arc<AppState>>,
+    query: String,
+    limit: usize,
+) -> Vec<PromptEntry> {
+    let prompts = state.prompts.read().unwrap();
+    search_prompts_impl(&prompts, &query, limit)
 }
 
 #[tauri::command]
@@ -324,6 +334,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_config,
             list_prompts,
+            search_prompts,
             set_prompts_dir,
             set_auto_paste,
             set_hotkey,

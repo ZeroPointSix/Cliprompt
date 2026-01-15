@@ -15,9 +15,6 @@
     preview: string;
     tags: string[];
     path: string;
-    searchText?: string;
-    tagsLower?: string[];
-    _score?: number;
   };
 
   type AppConfig = {
@@ -27,14 +24,11 @@
     auto_start: boolean;
   };
 
-  type ScoredPrompt = PromptEntry & { _score: number };
-
   const appWindow = getCurrentWindow();
   const maxResults = 8;
 
   let searchInput: HTMLInputElement | null = null;
   let query = $state<string>("");
-  let prompts = $state<PromptEntry[]>([]);
   let config = $state<AppConfig>({
     prompts_dir: "",
     auto_paste: true,
@@ -49,27 +43,25 @@
 
   let filtered = $state<PromptEntry[]>([]);
   let activePrompt = $state<PromptEntry | null>(null);
+  let searchTimer: ReturnType<typeof setTimeout> | null = null;
+  let searchToken = 0;
 
   let unlistenPrompts: UnlistenFn | null = null;
   let unlistenFocus: UnlistenFn | null = null;
 
   $effect(() => {
-    filtered = filterPrompts(prompts, query, maxResults);
-    if (selectedIndex >= filtered.length) {
-      selectedIndex = 0;
-    }
     activePrompt = filtered[selectedIndex] ?? null;
   });
 
   onMount(async () => {
     config = await invoke<AppConfig>("get_config");
     hotkeyDraft = config.hotkey;
-    prompts = normalizePrompts(await invoke<PromptEntry[]>("list_prompts"));
     await registerHotkey(config.hotkey);
+    await refreshResults();
 
-    unlistenPrompts = await listen<PromptEntry[]>("prompts-updated", (event) => {
-      prompts = normalizePrompts(event.payload ?? []);
+    unlistenPrompts = await listen("prompts-updated", () => {
       selectedIndex = 0;
+      void refreshResults();
     });
 
     unlistenFocus = await appWindow.onFocusChanged(({ payload }) => {
@@ -136,10 +128,10 @@
       return;
     }
     const dir = Array.isArray(result) ? result[0] : result;
-    const updated = await invoke<PromptEntry[]>("set_prompts_dir", { path: dir });
+    await invoke("set_prompts_dir", { path: dir });
     config = { ...config, prompts_dir: dir };
-    prompts = normalizePrompts(updated ?? []);
     status = "Folder updated";
+    await refreshResults();
   }
 
   async function applyHotkey() {
@@ -176,6 +168,7 @@
     await invoke("focus_last_window", { autoPaste: config.auto_paste });
     query = "";
     selectedIndex = 0;
+    void refreshResults();
   }
 
   async function openPrompt(prompt: PromptEntry | null | undefined) {
@@ -196,6 +189,7 @@
     const target = event.target as HTMLInputElement | null;
     query = target?.value ?? "";
     selectedIndex = 0;
+    scheduleSearch();
   }
 
   function onSearchKeydown(event: KeyboardEvent) {
@@ -227,69 +221,29 @@
     }
   }
 
-  function normalizePrompts(list: PromptEntry[]) {
-    return list.map((prompt) => ({
-      ...prompt,
-      searchText: buildSearchText(prompt),
-      tagsLower: (prompt.tags ?? []).map((tag) => tag.toLowerCase())
-    }));
+  function scheduleSearch() {
+    if (searchTimer) {
+      clearTimeout(searchTimer);
+    }
+    searchTimer = setTimeout(() => {
+      void refreshResults();
+    }, 40);
   }
 
-  function buildSearchText(prompt: PromptEntry) {
-    return `${prompt.title} ${prompt.preview} ${prompt.body} ${prompt.tags?.join(" ") ?? ""}`
-      .toLowerCase();
-  }
-
-  function filterPrompts(list: PromptEntry[], rawQuery: string, limit: number) {
-    const trimmed = rawQuery.trim().toLowerCase();
-    if (!trimmed) {
-      return list.slice(0, limit);
+  async function refreshResults() {
+    const token = ++searchToken;
+    const results = await invoke<PromptEntry[]>("search_prompts", {
+      query,
+      limit: maxResults
+    });
+    if (token !== searchToken) {
+      return;
     }
-    const tagMatches = Array.from(trimmed.matchAll(/#([\w-]+)/g)).map(
-      (match) => match[1]
-    );
-    const queryText = trimmed.replace(/#([\w-]+)/g, "").trim();
-    const results: ScoredPrompt[] = [];
-
-    for (const prompt of list) {
-      if (tagMatches.length) {
-        const hasAllTags = tagMatches.every((tag) =>
-          prompt.tagsLower?.includes(tag)
-        );
-        if (!hasAllTags) {
-          continue;
-        }
-      }
-      if (!queryText) {
-        results.push({ ...prompt, _score: 0 });
-        continue;
-      }
-      const score = scoreMatch(prompt.searchText ?? "", queryText);
-      if (score >= 0) {
-        results.push({ ...prompt, _score: score });
-      }
+    filtered = results ?? [];
+    if (selectedIndex >= filtered.length) {
+      selectedIndex = 0;
     }
-
-    results.sort((a, b) => a._score - b._score);
-    return results.slice(0, limit);
-  }
-
-  function scoreMatch(text: string, queryText: string) {
-    const exact = text.indexOf(queryText);
-    let score = 0;
-    if (exact >= 0) {
-      score -= 200 + exact;
-    }
-    let lastIndex = -1;
-    for (const char of queryText) {
-      const nextIndex = text.indexOf(char, lastIndex + 1);
-      if (nextIndex === -1) {
-        return -1;
-      }
-      score += nextIndex - lastIndex;
-      lastIndex = nextIndex;
-    }
-    return score;
+    activePrompt = filtered[selectedIndex] ?? null;
   }
 </script>
 
