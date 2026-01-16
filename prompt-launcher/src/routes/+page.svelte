@@ -409,6 +409,14 @@
     return highlightSnippet(snippet, terms);
   }
 
+  function getPreviewBodyHtml(prompt: PromptEntry) {
+    const terms = extractTerms(query);
+    if (terms.length === 0) {
+      return escapeHtml(prompt.body);
+    }
+    return highlightSnippet(prompt.body, terms);
+  }
+
   function escapeHtml(text: string) {
     return text.replace(/[&<>"']/g, (match) => {
       switch (match) {
@@ -932,7 +940,7 @@
         {#if activePrompt}
           <div class="preview-title">{activePrompt.title}</div>
           <div class="preview-meta">Last used: {formatLastUsed(activePrompt)}</div>
-          <div class="preview-body">{activePrompt.body}</div>
+          <div class="preview-body">{@html getPreviewBodyHtml(activePrompt)}</div>
           <div class="preview-actions">
             <button type="button" onclick={() => usePrompt(activePrompt)}>
               Paste
@@ -1249,6 +1257,13 @@
 }
 
 :global(.row-preview mark) {
+  background: rgba(255, 230, 150, 0.85);
+  color: #4a3f1f;
+  padding: 0 2px;
+  border-radius: 4px;
+}
+
+:global(.preview-body mark) {
   background: rgba(255, 230, 150, 0.85);
   color: #4a3f1f;
   padding: 0 2px;

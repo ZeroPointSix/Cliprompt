@@ -135,3 +135,8 @@
 
 - [x] Make tag chips clickable to toggle #tag filters.
 - [x] Run `npm run check` after code updates.
+
+## Iteration 27 (Preview highlights)
+
+- [x] Highlight matched terms inside the preview pane.
+- [x] Run `npm run check` after code updates.

@@ -29,6 +29,7 @@ Minimal Windows prompt manager that stays local, is file driven, and pastes into
 - Matched snippets in list rows while searching
 - Matched-term highlights in list snippets
 - Clickable tag chips to toggle #tag filters
+- Matched-term highlights in the preview pane
 - Clear recent shortcut: Ctrl+Shift+R
 - Toggle recent filter shortcut: Ctrl+Shift+E
 - Last-used timestamp in the preview panel
