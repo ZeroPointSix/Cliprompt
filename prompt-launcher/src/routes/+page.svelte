@@ -59,6 +59,8 @@
   let currentHotkey = "";
 
   let filtered = $state<PromptEntry[]>([]);
+  let allPrompts = $state<PromptEntry[]>([]);
+  let topTags = $state<{ tag: string; count: number }[]>([]);
   let activePrompt = $state<PromptEntry | null>(null);
   let recentList = $state<{ prompt: PromptEntry; index: number }[]>([]);
   let favoritesList = $state<{ prompt: PromptEntry; index: number }[]>([]);
@@ -88,15 +90,19 @@
     favoritesList = favorites;
     regularList = regular;
     activePrompt = filtered[selectedIndex] ?? null;
+    const tagSource = getTagSource();
+    topTags = buildTopTags(tagSource, 8);
   });
 
   onMount(async () => {
     config = await invoke<AppConfig>("get_config");
     hotkeyDraft = config.hotkey;
+    allPrompts = await invoke<PromptEntry[]>("list_prompts");
     await registerHotkey(config.hotkey);
     await refreshResults();
 
-    unlistenPrompts = await listen("prompts-updated", () => {
+    unlistenPrompts = await listen<PromptEntry[]>("prompts-updated", (event) => {
+      allPrompts = event.payload ?? [];
       selectedIndex = 0;
       void refreshResults();
     });
@@ -363,6 +369,36 @@
 
   function toggleSettings() {
     showSettings = !showSettings;
+  }
+
+  function buildTopTags(prompts: PromptEntry[], limit: number) {
+    const counts = new Map<string, number>();
+    prompts.forEach((prompt) => {
+      prompt.tags?.forEach((tag) => {
+        counts.set(tag, (counts.get(tag) ?? 0) + 1);
+      });
+    });
+    return Array.from(counts.entries())
+      .sort((a, b) => {
+        if (b[1] !== a[1]) {
+          return b[1] - a[1];
+        }
+        return a[0].localeCompare(b[0]);
+      })
+      .slice(0, limit)
+      .map(([tag, count]) => ({ tag, count }));
+  }
+
+  function getTagSource() {
+    if (showFavorites) {
+      return allPrompts.filter((prompt) => isFavorite(prompt));
+    }
+    if (showRecent) {
+      return buildRecentList(allPrompts, config.recent_ids).map(
+        (item) => item.prompt
+      );
+    }
+    return allPrompts;
   }
 
   function normalizeTagToken(tag: string) {
@@ -685,6 +721,25 @@
       />
       <span class="count">{filtered.length}</span>
     </div>
+
+    {#if topTags.length > 0}
+      <div class="tag-bar">
+        <span class="tag-bar-label">Top tags</span>
+        {#each topTags as item (item.tag)}
+          <button
+            class="tag"
+            class:active={isTagActive(item.tag)}
+            type="button"
+            onclick={(event) => {
+              event.stopPropagation();
+              toggleTagFilter(item.tag);
+            }}
+          >
+            #{item.tag}<span class="tag-count">{item.count}</span>
+          </button>
+        {/each}
+      </div>
+    {/if}
 
     <div class="content">
       <div class="list">
@@ -1192,6 +1247,27 @@
 .count {
   font-size: 12px;
   color: #5f6f63;
+}
+
+.tag-bar {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.tag-bar-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #708075;
+}
+
+.tag-count {
+  margin-left: 4px;
+  font-size: 9px;
+  opacity: 0.6;
 }
 
 .content {

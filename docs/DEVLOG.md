@@ -34,3 +34,4 @@
 - Made tag chips clickable to toggle #tag filters.
 - Highlighted matched terms inside the preview pane.
 - Applied the recent filter to search results.
+- Added a top-tags bar for quick #tag filtering.

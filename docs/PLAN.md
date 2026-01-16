@@ -145,3 +145,8 @@
 
 - [x] Apply the recent filter to search results.
 - [x] Run `npm run check` after code updates.
+
+## Iteration 29 (Top tags)
+
+- [x] Add a top-tags bar for quick #tag filtering.
+- [x] Run `npm run check` after code updates.
