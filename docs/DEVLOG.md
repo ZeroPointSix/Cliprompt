@@ -29,3 +29,4 @@
 - Added a Ctrl+Shift+E shortcut to toggle the recent filter.
 - Added a last-used timestamp in the preview panel.
 - Added a copy-snippet action in the preview panel.
+- Added a Ctrl+Shift+G shortcut to toggle favorites filter.

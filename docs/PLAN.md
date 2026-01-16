@@ -120,3 +120,8 @@
 
 - [x] Add a copy-snippet action in the preview panel.
 - [x] Run `npm run check` after code updates.
+
+## Iteration 24 (Favorites shortcut)
+
+- [x] Add a shortcut to toggle the favorites filter.
+- [x] Run `npm run check` after code updates.

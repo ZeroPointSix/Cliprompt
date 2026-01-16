@@ -452,6 +452,16 @@
     if (
       event.ctrlKey &&
       event.shiftKey &&
+      event.key.toLowerCase() === "g"
+    ) {
+      event.preventDefault();
+      toggleFavoritesFilter();
+      status = showFavorites ? "Favorites filter on" : "Favorites filter off";
+      return;
+    }
+    if (
+      event.ctrlKey &&
+      event.shiftKey &&
       event.key.toLowerCase() === "r"
     ) {
       event.preventDefault();
@@ -844,7 +854,7 @@
         {:else if status}
           <span>{status}</span>
         {:else}
-          <span>Enter to paste, right click to open, Ctrl+Shift+F to favorite, Ctrl+Shift+R to clear recent, Ctrl+Shift+E to toggle recent</span>
+          <span>Enter to paste, right click to open, Ctrl+Shift+F to favorite, Ctrl+Shift+G to toggle favorites, Ctrl+Shift+R to clear recent, Ctrl+Shift+E to toggle recent</span>
         {/if}
       </div>
     </footer>
@@ -866,7 +876,7 @@
         </div>
         <div class="settings-row">
           <span class="settings-label">Favorites</span>
-          <span>Toggle with Ctrl+Shift+F</span>
+          <span>Toggle with Ctrl+Shift+F (filter: Ctrl+Shift+G)</span>
         </div>
         <div class="settings-row">
           <span class="settings-label">Recent</span>
