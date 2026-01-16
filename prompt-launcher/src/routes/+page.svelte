@@ -618,7 +618,14 @@
     if (token !== searchToken) {
       return;
     }
-    filtered = results ?? [];
+    const baseResults = results ?? [];
+    if (showRecent) {
+      filtered = buildRecentList(baseResults, config.recent_ids).map(
+        (item) => item.prompt
+      );
+    } else {
+      filtered = baseResults;
+    }
     if (selectedIndex >= filtered.length) {
       selectedIndex = 0;
     }

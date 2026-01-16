@@ -26,6 +26,7 @@ Minimal Windows prompt manager that stays local, is file driven, and pastes into
 - Copy-path action in the preview panel
 - Recent section pinned at the top of the list
 - Recent filter toggle and clear action
+- Recent filter limits results to recently used prompts
 - Matched snippets in list rows while searching
 - Matched-term highlights in list snippets
 - Clickable tag chips to toggle #tag filters

@@ -140,3 +140,8 @@
 
 - [x] Highlight matched terms inside the preview pane.
 - [x] Run `npm run check` after code updates.
+
+## Iteration 28 (Recent filter)
+
+- [x] Apply the recent filter to search results.
+- [x] Run `npm run check` after code updates.
