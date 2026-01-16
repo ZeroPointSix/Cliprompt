@@ -165,3 +165,8 @@
 
 - [x] Persist the top-tags scope toggle in config.
 - [x] Run `npm run check` after code updates.
+
+## Iteration 33 (Top tags scope shortcut)
+
+- [x] Add a shortcut to toggle the top-tags scope.
+- [x] Run `npm run check` after code updates.

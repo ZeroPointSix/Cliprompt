@@ -38,3 +38,4 @@
 - Added a clear button to remove all #tag filters.
 - Added a scope toggle for top-tags (all vs results).
 - Persisted the top-tags scope toggle in config.
+- Added a shortcut to toggle the top-tags scope.

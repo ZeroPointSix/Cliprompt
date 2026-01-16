@@ -373,10 +373,14 @@
     showSettings = !showSettings;
   }
 
-  async function toggleTopTagsScope() {
-    const nextValue = !config.top_tags_use_results;
-    config = { ...config, top_tags_use_results: nextValue };
-    await invoke("set_top_tags_scope", { useResults: nextValue });
+  async function toggleTopTagsScope(nextValue?: boolean) {
+    const value =
+      typeof nextValue === "boolean"
+        ? nextValue
+        : !config.top_tags_use_results;
+    config = { ...config, top_tags_use_results: value };
+    await invoke("set_top_tags_scope", { useResults: value });
+    return value;
   }
 
   function buildTopTags(prompts: PromptEntry[], limit: number) {
@@ -632,6 +636,17 @@
       event.preventDefault();
       toggleRecentFilter();
       status = showRecent ? "Recent filter off" : "Recent filter on";
+      return;
+    }
+    if (
+      event.ctrlKey &&
+      event.shiftKey &&
+      event.key.toLowerCase() === "s"
+    ) {
+      event.preventDefault();
+      const nextValue = !config.top_tags_use_results;
+      void toggleTopTagsScope(nextValue);
+      status = nextValue ? "Top tags: results" : "Top tags: all";
       return;
     }
     if (filtered.length === 0) {
@@ -1098,7 +1113,7 @@
         {:else if status}
           <span>{status}</span>
         {:else}
-          <span>Enter to paste, right click to open, Ctrl+Shift+F to favorite, Ctrl+Shift+G to toggle favorites, Ctrl+Shift+R to clear recent, Ctrl+Shift+E to toggle recent</span>
+          <span>Enter to paste, right click to open, Ctrl+Shift+F to favorite, Ctrl+Shift+G to toggle favorites, Ctrl+Shift+R to clear recent, Ctrl+Shift+E to toggle recent, Ctrl+Shift+S to toggle top tags scope</span>
         {/if}
       </div>
     </footer>
@@ -1128,6 +1143,10 @@
           <button class="ghost tiny" type="button" onclick={clearRecent}>
             Clear
           </button>
+        </div>
+        <div class="settings-row">
+          <span class="settings-label">Top tags</span>
+          <span>Scope: {config.top_tags_use_results ? "Results" : "All"} (Ctrl+Shift+S)</span>
         </div>
         {#if hotkeyError}
           <div class="settings-row error">{hotkeyError}</div>

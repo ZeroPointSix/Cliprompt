@@ -34,6 +34,7 @@ Minimal Windows prompt manager that stays local, is file driven, and pastes into
 - Top tags bar for quick #tag filtering
 - Clear all #tag filters button
 - Top tags scope toggle (all prompts vs results, saved)
+- Top tags scope shortcut: Ctrl+Shift+S
 - Clear recent shortcut: Ctrl+Shift+R
 - Toggle recent filter shortcut: Ctrl+Shift+E
 - Last-used timestamp in the preview panel
