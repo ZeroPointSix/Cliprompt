@@ -42,6 +42,7 @@ Minimal Windows prompt manager that stays local, is file driven, and pastes into
 - Collapsible shortcuts legend under the search bar
 - Shortcuts legend auto-expands on first launch
 - Copy tags action in the preview pane
+- Chinese UI text (default)
 - Clear recent shortcut: Ctrl+Shift+R
 - Toggle recent filter shortcut: Ctrl+Shift+E
 - Last-used timestamp in the preview panel

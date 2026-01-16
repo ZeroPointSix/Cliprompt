@@ -47,3 +47,5 @@
 - Added a copy-tags action in the preview pane.
 - Added a reset action that clears search, tags, and list filters.
 - Auto-expanded the shortcuts legend on first launch.
+- Fixed Tauri build issues on Windows (tray feature, watcher typing, Win32 imports).
+- Translated UI strings and seed prompts to Chinese.

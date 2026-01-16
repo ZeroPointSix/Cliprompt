@@ -210,3 +210,13 @@
 
 - [x] Auto-expand the shortcuts legend on first launch.
 - [x] Run `npm run check` after code updates.
+
+## Iteration 42 (Windows build fixes)
+
+- [x] Fix Tauri build errors (tray feature, watcher typing, Windows API imports).
+- [x] Run `npm run check` after code updates.
+
+## Iteration 43 (Chinese UI)
+
+- [x] Translate UI strings and seed prompts to Chinese.
+- [x] Run `npm run check` after code updates.

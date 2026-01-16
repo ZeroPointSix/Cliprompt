@@ -1,7 +1,7 @@
 use serde::Serialize;
 use std::collections::HashSet;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use walkdir::WalkDir;
 
 #[derive(Debug, Clone, Serialize)]
@@ -178,7 +178,7 @@ fn split_query(query: &str) -> (Vec<String>, Vec<String>) {
                 tags.push(normalized);
             }
         } else {
-            terms.push(token);
+            terms.push(token.to_string());
         }
     }
 

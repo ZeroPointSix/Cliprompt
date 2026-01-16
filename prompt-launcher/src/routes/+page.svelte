@@ -151,7 +151,7 @@
       await register(hotkey, toggleWindow);
       currentHotkey = hotkey;
     } catch (error) {
-      hotkeyError = `Hotkey failed: ${error}`;
+      hotkeyError = `快捷键注册失败：${error}`;
     }
   }
 
@@ -187,20 +187,20 @@
     const dir = Array.isArray(result) ? result[0] : result;
     await invoke("set_prompts_dir", { path: dir });
     config = { ...config, prompts_dir: dir };
-    status = "Folder updated";
+    status = "目录已更新";
     await refreshResults();
   }
 
   async function applyHotkey() {
     if (!hotkeyDraft.trim()) {
-      hotkeyError = "Hotkey cannot be empty";
+      hotkeyError = "快捷键不能为空";
       return;
     }
     await registerHotkey(hotkeyDraft);
     if (!hotkeyError) {
       await invoke("set_hotkey", { hotkey: hotkeyDraft });
       config = { ...config, hotkey: hotkeyDraft };
-      status = "Hotkey saved";
+      status = "快捷键已保存";
       settingsError = "";
     }
   }
@@ -219,7 +219,7 @@
       settingsError = "";
     } catch (error) {
       config = { ...config, auto_start: !nextValue };
-      settingsError = `Auto-start failed: ${error}`;
+      settingsError = `自启设置失败：${error}`;
     }
   }
 
@@ -338,7 +338,7 @@
     }
     await writeText(prompt.body);
     await markRecent(prompt);
-    status = "Copied to clipboard";
+    status = "已复制到剪贴板";
   }
 
   async function copyTitle(prompt: PromptEntry | null | undefined) {
@@ -347,7 +347,7 @@
     }
     await writeText(prompt.title);
     await markRecent(prompt);
-    status = "Title copied";
+    status = "标题已复制";
   }
 
   async function copyPath(prompt: PromptEntry | null | undefined) {
@@ -356,7 +356,7 @@
     }
     await writeText(prompt.path);
     await markRecent(prompt);
-    status = "Path copied";
+    status = "路径已复制";
   }
 
   async function copyTags(prompt: PromptEntry | null | undefined) {
@@ -364,13 +364,13 @@
       return;
     }
     if (!prompt.tags?.length) {
-      status = "No tags to copy";
+      status = "没有可复制的标签";
       return;
     }
     const tagString = prompt.tags.map((tag) => `#${tag}`).join(" ");
     await writeText(tagString);
     await markRecent(prompt);
-    status = "Tags copied";
+    status = "标签已复制";
   }
 
   async function copySnippet(prompt: PromptEntry | null | undefined) {
@@ -379,12 +379,12 @@
     }
     const snippet = getRowPreview(prompt);
     if (!snippet) {
-      status = "No snippet available";
+      status = "没有可复制的片段";
       return;
     }
     await writeText(snippet);
     await markRecent(prompt);
-    status = "Snippet copied";
+    status = "片段已复制";
   }
 
   async function openPrompt(prompt: PromptEntry | null | undefined) {
@@ -504,7 +504,7 @@
     showRecent = false;
     query = "";
     selectedIndex = 0;
-    status = "Filters reset";
+    status = "筛选已重置";
     if (topTagsScopeBeforeFilter !== null) {
       void restoreTopTagsScopeAfterFilter();
     }
@@ -517,7 +517,7 @@
     const remaining = parts.filter((part) => !part.startsWith("#"));
     query = remaining.join(" ").trim();
     selectedIndex = 0;
-    status = "Tag filters cleared";
+    status = "标签已清空";
     void refreshResults();
     focusSearch();
   }
@@ -655,19 +655,19 @@
   function formatLastUsed(prompt: PromptEntry) {
     const timestamp = config.recent_meta[prompt.id];
     if (!timestamp) {
-      return "Never";
+      return "从未使用";
     }
     const delta = Date.now() - timestamp;
     if (delta < 60000) {
-      return "Just now";
+      return "刚刚";
     }
     if (delta < 3600000) {
-      return `${Math.floor(delta / 60000)}m ago`;
+      return `${Math.floor(delta / 60000)} 分钟前`;
     }
     if (delta < 86400000) {
-      return `${Math.floor(delta / 3600000)}h ago`;
+      return `${Math.floor(delta / 3600000)} 小时前`;
     }
-    return `${Math.floor(delta / 86400000)}d ago`;
+    return `${Math.floor(delta / 86400000)} 天前`;
   }
 
   function onSearchInput(event: Event) {
@@ -694,7 +694,7 @@
     ) {
       event.preventDefault();
       toggleFavoritesFilter();
-      status = showFavorites ? "Favorites filter on" : "Favorites filter off";
+      status = showFavorites ? "收藏过滤已开启" : "收藏过滤已关闭";
       return;
     }
     if (
@@ -704,7 +704,7 @@
     ) {
       event.preventDefault();
       void clearRecent();
-      status = "Recent cleared";
+      status = "最近记录已清空";
       return;
     }
     if (
@@ -714,7 +714,7 @@
     ) {
       event.preventDefault();
       toggleRecentFilter();
-      status = showRecent ? "Recent filter off" : "Recent filter on";
+      status = showRecent ? "最近过滤已关闭" : "最近过滤已开启";
       return;
     }
     if (
@@ -725,7 +725,7 @@
       event.preventDefault();
       const nextValue = !config.top_tags_use_results;
       void toggleTopTagsScope(nextValue);
-      status = nextValue ? "Top tags: results" : "Top tags: all";
+      status = nextValue ? "热门标签：结果" : "热门标签：全部";
       return;
     }
     if (filtered.length === 0) {
@@ -794,38 +794,38 @@
   <section class="panel">
     <header class="panel-header">
       <div class="title">
-        <span class="name">Prompt Launcher</span>
-        <span class="meta">Hotkey: {config.hotkey}</span>
-        <span class="meta">Folder: {config.prompts_dir || "Not set"}</span>
-        <span class="meta">Favorites: {config.favorites.length}</span>
+        <span class="name">提示词启动器</span>
+        <span class="meta">快捷键：{config.hotkey}</span>
+        <span class="meta">目录：{config.prompts_dir || "未设置"}</span>
+        <span class="meta">收藏：{config.favorites.length}</span>
         <span class="filter-chip" class:active={showFavorites}>
-          {showFavorites ? "Favorites filter" : "All prompts"}
+          {showFavorites ? "仅收藏" : "全部提示词"}
         </span>
       </div>
       <div class="actions">
         <button class="ghost" type="button" onclick={chooseFolder}>
-          Change Folder
+          更换目录
         </button>
         <button class="ghost" type="button" onclick={openFolder}>
-          Open Folder
+          打开目录
         </button>
         <button class="ghost" class:active={showFavorites} type="button" onclick={toggleFavoritesFilter}>
-          {showFavorites ? "All prompts" : `Favorites (${config.favorites.length})`}
+          {showFavorites ? "全部提示词" : `收藏 (${config.favorites.length})`}
         </button>
         <button class="ghost" class:active={showRecent} type="button" onclick={toggleRecentFilter}>
-          {showRecent ? "All prompts" : `Recent (${config.recent_ids.length})`}
+          {showRecent ? "全部提示词" : `最近 (${config.recent_ids.length})`}
         </button>
         <label class="toggle">
           <input type="checkbox" checked={config.auto_paste} onchange={toggleAutoPaste} />
-          <span>Auto paste</span>
+          <span>自动粘贴</span>
         </label>
         <label class="toggle">
           <input type="checkbox" checked={config.auto_start} onchange={toggleAutoStart} />
-          <span>Auto start</span>
+          <span>开机自启</span>
         </label>
         <label class="toggle">
           <input type="checkbox" checked={config.recent_enabled} onchange={toggleRecentEnabled} />
-          <span>Recent</span>
+          <span>最近</span>
         </label>
       </div>
     </header>
@@ -835,7 +835,7 @@
       <input
         bind:this={searchInput}
         class="search-input"
-        placeholder="Search prompts, use #tag"
+        placeholder="搜索提示词，支持 #标签"
         value={query}
         oninput={onSearchInput}
         onkeydown={onSearchKeydown}
@@ -846,25 +846,25 @@
         type="button"
         onclick={() => (showShortcuts = !showShortcuts)}
       >
-        {showShortcuts ? "Hide shortcuts" : "Shortcuts"}
+        {showShortcuts ? "隐藏快捷键" : "快捷键"}
       </button>
     </div>
 
     {#if showShortcuts}
       <div class="shortcut-bar">
-        <span>Enter: paste</span>
-        <span>Esc: hide</span>
-        <span>Ctrl+Shift+F: favorite</span>
-        <span>Ctrl+Shift+G: favorites filter</span>
-        <span>Ctrl+Shift+R: clear recent</span>
-        <span>Ctrl+Shift+E: recent filter</span>
-        <span>Ctrl+Shift+S: tag scope</span>
+        <span>Enter：粘贴</span>
+        <span>Esc：隐藏</span>
+        <span>Ctrl+Shift+F：收藏</span>
+        <span>Ctrl+Shift+G：收藏过滤</span>
+        <span>Ctrl+Shift+R：清空最近</span>
+        <span>Ctrl+Shift+E：最近过滤</span>
+        <span>Ctrl+Shift+S：标签范围</span>
       </div>
     {/if}
 
     {#if topTags.length > 0 || hasTagFilters() || config.top_tags_use_results}
       <div class="tag-bar">
-        <span class="tag-bar-label">Top tags</span>
+        <span class="tag-bar-label">热门标签</span>
         <button
           class="tag-scope"
           class:active={config.top_tags_use_results}
@@ -874,10 +874,10 @@
             toggleTopTagsScope();
           }}
         >
-          {config.top_tags_use_results ? "Scope: Results" : "Scope: All"}
+          {config.top_tags_use_results ? "范围：结果" : "范围：全部"}
         </button>
         {#if topTagsScopeBeforeFilter !== null}
-          <span class="tag-auto">Auto</span>
+          <span class="tag-auto">自动</span>
         {/if}
         {#if hasTagFilters()}
           <button
@@ -888,7 +888,7 @@
               clearTagFilters();
             }}
           >
-            Clear tags
+            清除标签
           </button>
         {/if}
         {#if hasAnyFilters()}
@@ -900,7 +900,7 @@
               resetAllFilters();
             }}
           >
-            Reset filters
+            重置筛选
           </button>
         {/if}
         {#each topTags as item (item.tag)}
@@ -923,12 +923,12 @@
       <div class="list">
         {#if filtered.length === 0}
           <div class="empty">
-            <span>No matches yet</span>
-            <span class="hint">Try a tag like #sql</span>
+            <span>暂无匹配</span>
+            <span class="hint">试试 #sql 这样的标签</span>
           </div>
         {:else if !showFavorites && !showRecent && (recentList.length > 0 || favoritesList.length > 0)}
           {#if recentList.length > 0}
-            <div class="section-label">Recent</div>
+            <div class="section-label">最近</div>
             {#each recentList as item (item.prompt.id)}
               <div
                 class:selected={item.index === selectedIndex}
@@ -981,7 +981,7 @@
                         toggleFavorite(item.prompt);
                       }}
                     >
-                      Fav
+                      收藏
                     </button>
                   </div>
               </div>
@@ -990,7 +990,7 @@
           {/each}
           {/if}
           {#if favoritesList.length > 0}
-            <div class="section-label">Favorites</div>
+            <div class="section-label">收藏</div>
             {#each favoritesList as item (item.prompt.id)}
               <div
                 class:selected={item.index === selectedIndex}
@@ -1043,7 +1043,7 @@
                         toggleFavorite(item.prompt);
                       }}
                     >
-                      Fav
+                      收藏
                     </button>
                   </div>
               </div>
@@ -1052,7 +1052,7 @@
           {/each}
           {/if}
           {#if regularList.length > 0}
-            <div class="section-label">All prompts</div>
+            <div class="section-label">全部提示词</div>
             {#each regularList as item (item.prompt.id)}
               <div
                 class:selected={item.index === selectedIndex}
@@ -1105,7 +1105,7 @@
                         toggleFavorite(item.prompt);
                       }}
                     >
-                      Fav
+                      收藏
                     </button>
                   </div>
               </div>
@@ -1166,7 +1166,7 @@
                       toggleFavorite(prompt);
                     }}
                   >
-                    Fav
+                    收藏
                   </button>
                 </div>
               </div>
@@ -1179,34 +1179,34 @@
       <aside class="preview">
         {#if activePrompt}
           <div class="preview-title">{activePrompt.title}</div>
-          <div class="preview-meta">Last used: {formatLastUsed(activePrompt)}</div>
+          <div class="preview-meta">上次使用：{formatLastUsed(activePrompt)}</div>
           <div class="preview-body">{@html getPreviewBodyHtml(activePrompt)}</div>
           <div class="preview-actions">
             <button type="button" onclick={() => usePrompt(activePrompt)}>
-              Paste
+              粘贴
             </button>
             <button class="ghost" type="button" onclick={() => copyPrompt(activePrompt)}>
-              Copy
+              复制
             </button>
             <button class="ghost" type="button" onclick={() => copyTitle(activePrompt)}>
-              Copy Title
+              复制标题
             </button>
             <button class="ghost" type="button" onclick={() => copyPath(activePrompt)}>
-              Copy Path
+              复制路径
             </button>
             <button class="ghost" type="button" onclick={() => copyTags(activePrompt)}>
-              Copy Tags
+              复制标签
             </button>
             <button class="ghost" type="button" onclick={() => copySnippet(activePrompt)}>
-              Copy Snippet
+              复制片段
             </button>
             <button class="ghost" type="button" onclick={() => openPrompt(activePrompt)}>
-              Open File
+              打开文件
             </button>
           </div>
         {:else}
           <div class="preview-empty">
-            <span>Pick a prompt to preview</span>
+            <span>请选择提示词预览</span>
           </div>
         {/if}
       </aside>
@@ -1214,11 +1214,11 @@
 
     <footer class="panel-footer">
       <div class="hotkey">
-        <span>Change hotkey</span>
+        <span>更换快捷键</span>
         <input class="hotkey-input" bind:value={hotkeyDraft} />
-        <button type="button" onclick={applyHotkey}>Apply</button>
+        <button type="button" onclick={applyHotkey}>应用</button>
         <button class="ghost" type="button" onclick={toggleSettings}>
-          {showSettings ? "Hide settings" : "Settings"}
+          {showSettings ? "隐藏设置" : "设置"}
         </button>
       </div>
       <div class="status">
@@ -1229,43 +1229,43 @@
         {:else if status}
           <span>{status}</span>
         {:else}
-          <span>Enter to paste, right click to open, Ctrl+Shift+F to favorite, Ctrl+Shift+G to toggle favorites, Ctrl+Shift+R to clear recent, Ctrl+Shift+E to toggle recent, Ctrl+Shift+S to toggle top tags scope</span>
+          <span>Enter：粘贴，右键：打开文件，Ctrl+Shift+F：收藏，Ctrl+Shift+G：收藏过滤，Ctrl+Shift+R：清空最近，Ctrl+Shift+E：最近过滤，Ctrl+Shift+S：标签范围</span>
         {/if}
       </div>
     </footer>
 
     {#if showSettings}
       <section class="settings">
-        <div class="settings-title">Settings info</div>
+        <div class="settings-title">设置说明</div>
         <div class="settings-row">
-          <span class="settings-label">Hotkey format</span>
-          <span>Use modifiers like Ctrl, Alt, Shift. Example: Ctrl+Shift+P</span>
+          <span class="settings-label">快捷键格式</span>
+          <span>使用 Ctrl、Alt、Shift 等组合。例如：Ctrl+Shift+P</span>
         </div>
         <div class="settings-row">
-          <span class="settings-label">Current hotkey</span>
+          <span class="settings-label">当前快捷键</span>
           <span>{config.hotkey}</span>
         </div>
         <div class="settings-row">
-          <span class="settings-label">Auto start</span>
-          <span>{config.auto_start ? "Enabled" : "Disabled"}</span>
+          <span class="settings-label">开机自启</span>
+          <span>{config.auto_start ? "已启用" : "已关闭"}</span>
         </div>
         <div class="settings-row">
-          <span class="settings-label">Favorites</span>
-          <span>Toggle with Ctrl+Shift+F (filter: Ctrl+Shift+G)</span>
+          <span class="settings-label">收藏</span>
+          <span>Ctrl+Shift+F 收藏（过滤：Ctrl+Shift+G）</span>
         </div>
         <div class="settings-row">
-          <span class="settings-label">Recent</span>
-          <span>Use the Recent toggle to enable/disable tracking (Ctrl+Shift+R clears, Ctrl+Shift+E toggles)</span>
+          <span class="settings-label">最近</span>
+          <span>使用“最近”开关启用/停用记录（Ctrl+Shift+R 清空，Ctrl+Shift+E 切换）</span>
           <button class="ghost tiny" type="button" onclick={clearRecent}>
-            Clear
+            清空
           </button>
         </div>
         <div class="settings-row">
-          <span class="settings-label">Top tags</span>
-          <span>Scope: {config.top_tags_use_results ? "Results" : "All"} (Ctrl+Shift+S)</span>
+          <span class="settings-label">热门标签</span>
+          <span>范围：{config.top_tags_use_results ? "结果" : "全部"}（Ctrl+Shift+S）</span>
         </div>
         <div class="settings-row">
-          <span class="settings-label">Top tags count</span>
+          <span class="settings-label">热门标签数量</span>
           <select
             class="settings-select"
             value={config.top_tags_limit}

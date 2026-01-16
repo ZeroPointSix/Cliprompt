@@ -1,12 +1,12 @@
 use std::mem::size_of;
 use windows::Win32::Foundation::{BOOL, HWND};
-use windows::Win32::System::Threading::GetCurrentThreadId;
+use windows::Win32::System::Threading::{AttachThreadInput, GetCurrentThreadId};
 use windows::Win32::UI::Input::KeyboardAndMouse::{
-    SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYBD_EVENT_FLAGS, KEYEVENTF_KEYUP,
-    VIRTUAL_KEY, VK_CONTROL, VK_V,
+    SendInput, SetFocus, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYBD_EVENT_FLAGS,
+    KEYEVENTF_KEYUP, VIRTUAL_KEY, VK_CONTROL, VK_V,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    AttachThreadInput, GetForegroundWindow, GetWindowThreadProcessId, SetFocus, SetForegroundWindow,
+    GetForegroundWindow, GetWindowThreadProcessId, SetForegroundWindow,
 };
 
 pub fn capture_foreground_window() -> Option<isize> {
@@ -27,7 +27,7 @@ pub fn focus_window(hwnd: isize) -> Result<(), String> {
             return Err("no active window captured".to_string());
         }
 
-        let target_thread = GetWindowThreadProcessId(hwnd, std::ptr::null_mut());
+        let target_thread = GetWindowThreadProcessId(hwnd, None);
         let current_thread = GetCurrentThreadId();
         let _ = AttachThreadInput(current_thread, target_thread, BOOL(1));
         let _ = SetForegroundWindow(hwnd);

@@ -17,6 +17,7 @@ use tauri::{
     tray::{TrayIconBuilder, TrayIconEvent},
     AppHandle, Manager, State,
 };
+use tauri::Emitter;
 
 use config::{load_or_init, save, AppConfig};
 use prompts::{index_prompts, search_prompts as search_prompts_impl, PromptEntry};
@@ -313,11 +314,11 @@ fn toggle_main_window(app: &AppHandle) -> Result<(), String> {
 }
 
 fn init_tray(app: &tauri::App) -> Result<(), String> {
-    let show = MenuItem::with_id(app, "show", "Show", true, None)
+    let show = MenuItem::with_id(app, "show", "Show", true, None::<&str>)
         .map_err(|e| format!("menu item failed: {e}"))?;
-    let hide = MenuItem::with_id(app, "hide", "Hide", true, None)
+    let hide = MenuItem::with_id(app, "hide", "Hide", true, None::<&str>)
         .map_err(|e| format!("menu item failed: {e}"))?;
-    let quit = MenuItem::with_id(app, "quit", "Quit", true, None)
+    let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)
         .map_err(|e| format!("menu item failed: {e}"))?;
     let menu = Menu::with_items(app, &[&show, &hide, &quit])
         .map_err(|e| format!("menu build failed: {e}"))?;
@@ -365,25 +366,25 @@ fn seed_prompts_if_empty(dir: &Path) -> Result<(), String> {
         return Ok(());
     }
 
-    let quickstart = dir.join("Quickstart #welcome.md");
+    let quickstart = dir.join("快速开始 #welcome.md");
     if !quickstart.exists() {
         let content = "\
-Prompt Launcher Quickstart
+提示词启动器快速开始
 
-- Use the global hotkey to open the launcher.
-- Type to search, including #tags.
-- Enter pastes. Right click opens the file.
+- 使用全局快捷键打开启动器。
+- 输入关键词搜索，支持 #标签。
+- Enter 粘贴，右键打开文件。
 ";
         fs::write(&quickstart, content).map_err(|e| format!("seed quickstart failed: {e}"))?;
     }
 
     let examples_dir = dir.join("Examples");
     fs::create_dir_all(&examples_dir).map_err(|e| format!("seed dir failed: {e}"))?;
-    let email = examples_dir.join("Email reply #email.txt");
+    let email = examples_dir.join("邮件回复 #email.txt");
     if !email.exists() {
         let content = "\
-Reply in a friendly, concise tone.
-Summarize the request, confirm next steps, and ask for missing details.
+请用友好、简洁的语气回复。
+总结对方需求，确认下一步，并询问缺失信息。
 ";
         fs::write(&email, content).map_err(|e| format!("seed email failed: {e}"))?;
     }
@@ -399,17 +400,19 @@ fn start_watcher(
     let index_dir = dir.clone();
     let app_handle = app.clone();
     let state_handle = state.clone();
-    let mut watcher = notify::recommended_watcher(move |res| {
-        if res.is_err() {
-            return;
-        }
-        let prompts = index_prompts(&index_dir);
-        {
-            let mut lock = state_handle.prompts.write().unwrap();
-            *lock = prompts.clone();
-        }
-        let _ = app_handle.emit("prompts-updated", prompts);
-    })
+    let mut watcher = notify::recommended_watcher(
+        move |res: notify::Result<notify::Event>| {
+            if res.is_err() {
+                return;
+            }
+            let prompts = index_prompts(&index_dir);
+            {
+                let mut lock = state_handle.prompts.write().unwrap();
+                *lock = prompts.clone();
+            }
+            let _ = app_handle.emit("prompts-updated", prompts);
+        },
+    )
     .map_err(|e| format!("watcher init failed: {e}"))?;
 
     watcher
@@ -426,7 +429,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_clipboard_manager::init())
-        .plugin(tauri_plugin_global_shortcut::init())
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .setup(|app| {
             let handle = app.handle();
             let config = load_or_init(handle)
