@@ -180,3 +180,8 @@
 
 - [x] Auto-switch top-tags scope when Favorites/Recent filters are active.
 - [x] Run `npm run check` after code updates.
+
+## Iteration 36 (Auto scope indicator)
+
+- [x] Show an auto indicator when top-tags scope is overridden by filters.
+- [x] Run `npm run check` after code updates.

@@ -817,6 +817,9 @@
         >
           {config.top_tags_use_results ? "Scope: Results" : "Scope: All"}
         </button>
+        {#if topTagsScopeBeforeFilter !== null}
+          <span class="tag-auto">Auto</span>
+        {/if}
         {#if hasTagFilters()}
           <button
             class="tag-clear"
@@ -1405,6 +1408,13 @@
   background: rgba(221, 243, 232, 0.9);
   border-color: rgba(61, 108, 90, 0.6);
   color: #2d6a57;
+}
+
+.tag-auto {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #708075;
 }
 
 .tag-clear {

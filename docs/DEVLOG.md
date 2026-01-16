@@ -41,3 +41,4 @@
 - Added a shortcut to toggle the top-tags scope.
 - Added a reset button to clear the search query and tag filters.
 - Auto-switched top-tags scope when Favorites/Recent filters are active.
+- Added an auto indicator when top-tags scope is overridden by filters.
