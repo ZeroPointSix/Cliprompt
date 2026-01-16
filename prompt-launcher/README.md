@@ -35,7 +35,7 @@ Minimal Windows prompt manager that stays local, is file driven, and pastes into
 - Clear all #tag filters button
 - Top tags scope toggle (all prompts vs results, saved)
 - Top tags scope shortcut: Ctrl+Shift+S
-- Reset search button (clears query + tags)
+- Reset filters button (clears search, tags, and list filters)
 - Top tags scope auto-switches when Favorites/Recent filters are active
 - Auto indicator shown when top-tags scope is overridden
 - Configurable top tags count (5/8/12)

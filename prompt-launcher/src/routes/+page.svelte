@@ -481,6 +481,10 @@
     return query.trim().length > 0;
   }
 
+  function hasAnyFilters() {
+    return hasQuery() || showFavorites || showRecent;
+  }
+
   function isTagActive(tag: string) {
     const token = normalizeTagToken(tag);
     return query
@@ -488,10 +492,15 @@
       .some((part) => part.toLowerCase() === token);
   }
 
-  function resetSearchFilters() {
+  function resetAllFilters() {
+    showFavorites = false;
+    showRecent = false;
     query = "";
     selectedIndex = 0;
-    status = "Search cleared";
+    status = "Filters reset";
+    if (topTagsScopeBeforeFilter !== null) {
+      void restoreTopTagsScopeAfterFilter();
+    }
     void refreshResults();
     focusSearch();
   }
@@ -875,16 +884,16 @@
             Clear tags
           </button>
         {/if}
-        {#if hasQuery()}
+        {#if hasAnyFilters()}
           <button
             class="tag-clear"
             type="button"
             onclick={(event) => {
               event.stopPropagation();
-              resetSearchFilters();
+              resetAllFilters();
             }}
           >
-            Reset search
+            Reset filters
           </button>
         {/if}
         {#each topTags as item (item.tag)}

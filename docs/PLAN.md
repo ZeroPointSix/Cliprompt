@@ -200,3 +200,8 @@
 
 - [x] Add a copy-tags action in the preview pane.
 - [x] Run `npm run check` after code updates.
+
+## Iteration 40 (Reset filters)
+
+- [x] Add a reset action that clears search, tags, and list filters.
+- [x] Run `npm run check` after code updates.

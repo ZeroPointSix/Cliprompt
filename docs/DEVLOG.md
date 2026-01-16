@@ -45,3 +45,4 @@
 - Allowed configuring how many top tags are shown.
 - Added a collapsible shortcuts legend under the search bar.
 - Added a copy-tags action in the preview pane.
+- Added a reset action that clears search, tags, and list filters.
