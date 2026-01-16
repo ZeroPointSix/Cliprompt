@@ -374,6 +374,67 @@
     return snippet || prompt.preview;
   }
 
+  function getRowPreviewHtml(prompt: PromptEntry) {
+    const snippet = getRowPreview(prompt);
+    if (!snippet) {
+      return "";
+    }
+    const terms = extractTerms(query);
+    if (terms.length === 0) {
+      return escapeHtml(snippet);
+    }
+    return highlightSnippet(snippet, terms);
+  }
+
+  function escapeHtml(text: string) {
+    return text.replace(/[&<>"']/g, (match) => {
+      switch (match) {
+        case "&":
+          return "&amp;";
+        case "<":
+          return "&lt;";
+        case ">":
+          return "&gt;";
+        case "\"":
+          return "&quot;";
+        case "'":
+          return "&#39;";
+        default:
+          return match;
+      }
+    });
+  }
+
+  function escapeRegex(text: string) {
+    return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  }
+
+  function highlightSnippet(snippet: string, terms: string[]) {
+    const uniqueTerms = Array.from(new Set(terms.filter(Boolean)));
+    if (uniqueTerms.length === 0) {
+      return escapeHtml(snippet);
+    }
+    const pattern = uniqueTerms.map(escapeRegex).join("|");
+    if (!pattern) {
+      return escapeHtml(snippet);
+    }
+    const regex = new RegExp(`(${pattern})`, "gi");
+    let result = "";
+    let lastIndex = 0;
+    for (const match of snippet.matchAll(regex)) {
+      const index = match.index ?? 0;
+      const value = match[0] ?? "";
+      if (index < lastIndex) {
+        continue;
+      }
+      result += escapeHtml(snippet.slice(lastIndex, index));
+      result += `<mark>${escapeHtml(value)}</mark>`;
+      lastIndex = index + value.length;
+    }
+    result += escapeHtml(snippet.slice(lastIndex));
+    return result;
+  }
+
   function extractTerms(rawQuery: string) {
     return rawQuery
       .split(/\s+/)
@@ -798,7 +859,7 @@
                   </button>
                 </div>
               </div>
-              <div class="row-preview">{getRowPreview(prompt)}</div>
+              <div class="row-preview">{@html getRowPreviewHtml(prompt)}</div>
             </div>
           {/each}
         {/if}
@@ -1122,6 +1183,13 @@
   margin-top: 6px;
   font-size: 12px;
   color: #6c7a70;
+}
+
+:global(.row-preview mark) {
+  background: rgba(255, 230, 150, 0.85);
+  color: #4a3f1f;
+  padding: 0 2px;
+  border-radius: 4px;
 }
 
 .tags {

@@ -125,3 +125,8 @@
 
 - [x] Add a shortcut to toggle the favorites filter.
 - [x] Run `npm run check` after code updates.
+
+## Iteration 25 (Snippet highlights)
+
+- [x] Highlight matched terms in list snippets.
+- [x] Run `npm run check` after code updates.
