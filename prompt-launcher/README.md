@@ -15,7 +15,7 @@ Minimal Windows prompt manager that stays local, is file driven, and pastes into
 - Rust-side fuzzy ranking for large prompt sets
 - Copy-only quick action in preview
 - Copy-title action for snippet titles
-- Compact settings drawer with hotkey guidance
+- Dedicated settings page with hotkey guidance
 - Favorites toggle with quick filter
 - Favorite toggle shortcut: Ctrl+Shift+F
 - Favorites filter shortcut: Ctrl+Shift+G
@@ -38,9 +38,9 @@ Minimal Windows prompt manager that stays local, is file driven, and pastes into
 - Reset filters button (clears search, tags, and list filters)
 - Top tags scope auto-switches when Favorites/Recent filters are active
 - Auto indicator shown when top-tags scope is overridden
-- Configurable top tags count (5/8/12)
-- Collapsible shortcuts legend under the search bar
-- Shortcuts legend auto-expands on first launch
+- Configurable top tags count (5/8/12/16)
+- Collapsible shortcuts legend in settings
+- Shortcuts legend auto-expands on first open
 - Copy tags action in the preview pane
 - Chinese UI text (default)
 - Clear recent shortcut: Ctrl+Shift+R

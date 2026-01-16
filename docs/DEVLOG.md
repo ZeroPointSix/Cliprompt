@@ -50,3 +50,4 @@
 - Fixed Tauri build issues on Windows (tray feature, watcher typing, Win32 imports).
 - Translated UI strings and seed prompts to Chinese.
 - Added the initial code review report to docs.
+- Replaced the settings drawer with a traditional settings page and moved shortcuts there.

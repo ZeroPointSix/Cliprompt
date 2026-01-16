@@ -225,3 +225,9 @@
 
 - [x] Track the initial code review report in docs.
 - [x] Run `npm run check` after code updates.
+
+## Iteration 45 (Settings page)
+
+- [x] Replace the settings drawer with a traditional settings page.
+- [x] Move the shortcuts legend into settings.
+- [x] Run `npm run check` after code updates.

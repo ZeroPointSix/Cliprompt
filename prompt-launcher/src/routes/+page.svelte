@@ -179,7 +179,7 @@
     const result = await openDialog({
       directory: true,
       multiple: false,
-      title: "Select prompts folder"
+      title: "选择提示词目录"
     });
     if (!result) {
       return;
@@ -401,8 +401,12 @@
     await openPath(config.prompts_dir);
   }
 
-  function toggleSettings() {
+  async function toggleSettings() {
     showSettings = !showSettings;
+    if (!showSettings) {
+      await tick();
+      focusSearch();
+    }
   }
 
   async function toggleTopTagsScope(nextValue?: boolean) {
@@ -792,44 +796,227 @@
 
 <main class="shell">
   <section class="panel">
-    <header class="panel-header">
-      <div class="title">
-        <span class="name">提示词启动器</span>
-        <span class="meta">快捷键：{config.hotkey}</span>
-        <span class="meta">目录：{config.prompts_dir || "未设置"}</span>
-        <span class="meta">收藏：{config.favorites.length}</span>
-        <span class="filter-chip" class:active={showFavorites}>
-          {showFavorites ? "仅收藏" : "全部提示词"}
-        </span>
-      </div>
-      <div class="actions">
-        <button class="ghost" type="button" onclick={chooseFolder}>
-          更换目录
-        </button>
-        <button class="ghost" type="button" onclick={openFolder}>
-          打开目录
-        </button>
-        <button class="ghost" class:active={showFavorites} type="button" onclick={toggleFavoritesFilter}>
-          {showFavorites ? "全部提示词" : `收藏 (${config.favorites.length})`}
-        </button>
-        <button class="ghost" class:active={showRecent} type="button" onclick={toggleRecentFilter}>
-          {showRecent ? "全部提示词" : `最近 (${config.recent_ids.length})`}
-        </button>
-        <label class="toggle">
-          <input type="checkbox" checked={config.auto_paste} onchange={toggleAutoPaste} />
-          <span>自动粘贴</span>
-        </label>
-        <label class="toggle">
-          <input type="checkbox" checked={config.auto_start} onchange={toggleAutoStart} />
-          <span>开机自启</span>
-        </label>
-        <label class="toggle">
-          <input type="checkbox" checked={config.recent_enabled} onchange={toggleRecentEnabled} />
-          <span>最近</span>
-        </label>
-      </div>
-    </header>
+    {#if showSettings}
+      <header class="panel-header settings-header">
+        <div class="title">
+          <span class="name">设置</span>
+          <span class="meta">基础配置与行为选项</span>
+        </div>
+        <div class="actions">
+          <button class="ghost" type="button" onclick={toggleSettings}>
+            返回
+          </button>
+        </div>
+      </header>
+    {:else}
+      <header class="panel-header">
+        <div class="title">
+          <span class="name">提示词启动器</span>
+          <span class="meta">快捷键：{config.hotkey}</span>
+          <span class="meta">目录：{config.prompts_dir || "未设置"}</span>
+          <span class="meta">收藏：{config.favorites.length}</span>
+          <span class="filter-chip" class:active={showFavorites}>
+            {showFavorites ? "仅收藏" : "全部提示词"}
+          </span>
+        </div>
+        <div class="actions">
+          <button class="ghost" class:active={showFavorites} type="button" onclick={toggleFavoritesFilter}>
+            {showFavorites ? "全部提示词" : `收藏 (${config.favorites.length})`}
+          </button>
+          <button class="ghost" class:active={showRecent} type="button" onclick={toggleRecentFilter}>
+            {showRecent ? "全部提示词" : `最近 (${config.recent_ids.length})`}
+          </button>
+          <button class="ghost" type="button" onclick={toggleSettings}>
+            设置
+          </button>
+        </div>
+      </header>
+    {/if}
 
+    {#if showSettings}
+      <section class="settings-page">
+        <div class="settings-section">
+          <div class="settings-section-title">基础</div>
+          <div class="settings-row">
+            <div class="settings-label">提示词目录</div>
+            <div class="settings-control">
+              <div class="settings-value">
+                {config.prompts_dir || "未设置"}
+              </div>
+              <div class="settings-actions">
+                <button type="button" onclick={chooseFolder}>选择目录</button>
+                <button
+                  class="ghost"
+                  type="button"
+                  onclick={openFolder}
+                  disabled={!config.prompts_dir}
+                >
+                  打开目录
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <div class="settings-section-title">快捷键</div>
+          <div class="settings-row">
+            <div class="settings-label">唤起快捷键</div>
+            <div class="settings-control">
+              <div class="settings-inline">
+                <input class="hotkey-input" bind:value={hotkeyDraft} />
+                <button type="button" onclick={applyHotkey}>应用</button>
+              </div>
+              <div class="settings-hint">格式示例：Ctrl+Shift+P</div>
+              <div class="settings-hint">当前：{config.hotkey}</div>
+            </div>
+          </div>
+          {#if hotkeyError}
+            <div class="settings-message error">{hotkeyError}</div>
+          {/if}
+        </div>
+
+        <div class="settings-section">
+          <div class="settings-section-title">行为</div>
+          <div class="settings-row">
+            <div class="settings-label">自动粘贴</div>
+            <div class="settings-control">
+              <label class="toggle">
+                <input
+                  type="checkbox"
+                  checked={config.auto_paste}
+                  onchange={toggleAutoPaste}
+                />
+                <span>粘贴后返回原窗口</span>
+              </label>
+            </div>
+          </div>
+          <div class="settings-row">
+            <div class="settings-label">开机自启</div>
+            <div class="settings-control">
+              <label class="toggle">
+                <input
+                  type="checkbox"
+                  checked={config.auto_start}
+                  onchange={toggleAutoStart}
+                />
+                <span>{config.auto_start ? "已启用" : "已关闭"}</span>
+              </label>
+            </div>
+          </div>
+          {#if settingsError}
+            <div class="settings-message error">{settingsError}</div>
+          {/if}
+        </div>
+
+        <div class="settings-section">
+          <div class="settings-section-title">最近与收藏</div>
+          <div class="settings-row">
+            <div class="settings-label">最近记录</div>
+            <div class="settings-control">
+              <label class="toggle">
+                <input
+                  type="checkbox"
+                  checked={config.recent_enabled}
+                  onchange={toggleRecentEnabled}
+                />
+                <span>{config.recent_enabled ? "已开启" : "已关闭"}</span>
+              </label>
+              <div class="settings-actions">
+                <button class="ghost tiny" type="button" onclick={clearRecent}>
+                  清空最近
+                </button>
+              </div>
+            </div>
+          </div>
+          <div class="settings-row">
+            <div class="settings-label">收藏操作</div>
+            <div class="settings-control">
+              <div class="settings-hint">
+                Ctrl+Shift+F 收藏，Ctrl+Shift+G 过滤
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <div class="settings-section-title">热门标签</div>
+          <div class="settings-row">
+            <div class="settings-label">统计范围</div>
+            <div class="settings-control">
+              <div class="segment">
+                <button
+                  class="ghost segment-item"
+                  class:active={!config.top_tags_use_results}
+                  type="button"
+                  onclick={() => toggleTopTagsScope(false)}
+                >
+                  全部
+                </button>
+                <button
+                  class="ghost segment-item"
+                  class:active={config.top_tags_use_results}
+                  type="button"
+                  onclick={() => toggleTopTagsScope(true)}
+                >
+                  结果
+                </button>
+              </div>
+              {#if topTagsScopeBeforeFilter !== null}
+                <div class="settings-hint">当前范围由筛选自动切换</div>
+              {/if}
+            </div>
+          </div>
+          <div class="settings-row">
+            <div class="settings-label">显示数量</div>
+            <div class="settings-control">
+              <select
+                class="settings-select"
+                value={config.top_tags_limit}
+                onchange={(event) => {
+                  const target = event.target as HTMLSelectElement | null;
+                  const value = target ? Number(target.value) : 8;
+                  void setTopTagsLimit(value);
+                }}
+              >
+                <option value="5">5</option>
+                <option value="8">8</option>
+                <option value="12">12</option>
+                <option value="16">16</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <div class="settings-section-title">快捷键一览</div>
+          <div class="settings-row">
+            <div class="settings-label">展开说明</div>
+            <div class="settings-control">
+              <button
+                class="ghost"
+                type="button"
+                onclick={() => (showShortcuts = !showShortcuts)}
+              >
+                {showShortcuts ? "收起" : "展开"}
+              </button>
+              {#if showShortcuts}
+                <div class="shortcut-list">
+                  <span>Enter：粘贴</span>
+                  <span>Esc：隐藏</span>
+                  <span>右键：打开文件</span>
+                  <span>Ctrl+Shift+F：收藏</span>
+                  <span>Ctrl+Shift+G：收藏过滤</span>
+                  <span>Ctrl+Shift+R：清空最近</span>
+                  <span>Ctrl+Shift+E：最近过滤</span>
+                  <span>Ctrl+Shift+S：标签范围</span>
+                </div>
+              {/if}
+            </div>
+          </div>
+        </div>
+      </section>
+    {:else}
     <div class="search">
       <span class="search-icon">/</span>
       <input
@@ -841,26 +1028,7 @@
         onkeydown={onSearchKeydown}
       />
       <span class="count">{filtered.length}</span>
-      <button
-        class="shortcut-toggle"
-        type="button"
-        onclick={() => (showShortcuts = !showShortcuts)}
-      >
-        {showShortcuts ? "隐藏快捷键" : "快捷键"}
-      </button>
     </div>
-
-    {#if showShortcuts}
-      <div class="shortcut-bar">
-        <span>Enter：粘贴</span>
-        <span>Esc：隐藏</span>
-        <span>Ctrl+Shift+F：收藏</span>
-        <span>Ctrl+Shift+G：收藏过滤</span>
-        <span>Ctrl+Shift+R：清空最近</span>
-        <span>Ctrl+Shift+E：最近过滤</span>
-        <span>Ctrl+Shift+S：标签范围</span>
-      </div>
-    {/if}
 
     {#if topTags.length > 0 || hasTagFilters() || config.top_tags_use_results}
       <div class="tag-bar">
@@ -1213,20 +1381,8 @@
     </div>
 
     <footer class="panel-footer">
-      <div class="hotkey">
-        <span>更换快捷键</span>
-        <input class="hotkey-input" bind:value={hotkeyDraft} />
-        <button type="button" onclick={applyHotkey}>应用</button>
-        <button class="ghost" type="button" onclick={toggleSettings}>
-          {showSettings ? "隐藏设置" : "设置"}
-        </button>
-      </div>
       <div class="status">
-        {#if hotkeyError}
-          <span class="error">{hotkeyError}</span>
-        {:else if settingsError}
-          <span class="error">{settingsError}</span>
-        {:else if status}
+        {#if status}
           <span>{status}</span>
         {:else}
           <span>Enter：粘贴，右键：打开文件，Ctrl+Shift+F：收藏，Ctrl+Shift+G：收藏过滤，Ctrl+Shift+R：清空最近，Ctrl+Shift+E：最近过滤，Ctrl+Shift+S：标签范围</span>
@@ -1234,58 +1390,6 @@
       </div>
     </footer>
 
-    {#if showSettings}
-      <section class="settings">
-        <div class="settings-title">设置说明</div>
-        <div class="settings-row">
-          <span class="settings-label">快捷键格式</span>
-          <span>使用 Ctrl、Alt、Shift 等组合。例如：Ctrl+Shift+P</span>
-        </div>
-        <div class="settings-row">
-          <span class="settings-label">当前快捷键</span>
-          <span>{config.hotkey}</span>
-        </div>
-        <div class="settings-row">
-          <span class="settings-label">开机自启</span>
-          <span>{config.auto_start ? "已启用" : "已关闭"}</span>
-        </div>
-        <div class="settings-row">
-          <span class="settings-label">收藏</span>
-          <span>Ctrl+Shift+F 收藏（过滤：Ctrl+Shift+G）</span>
-        </div>
-        <div class="settings-row">
-          <span class="settings-label">最近</span>
-          <span>使用“最近”开关启用/停用记录（Ctrl+Shift+R 清空，Ctrl+Shift+E 切换）</span>
-          <button class="ghost tiny" type="button" onclick={clearRecent}>
-            清空
-          </button>
-        </div>
-        <div class="settings-row">
-          <span class="settings-label">热门标签</span>
-          <span>范围：{config.top_tags_use_results ? "结果" : "全部"}（Ctrl+Shift+S）</span>
-        </div>
-        <div class="settings-row">
-          <span class="settings-label">热门标签数量</span>
-          <select
-            class="settings-select"
-            value={config.top_tags_limit}
-            onchange={(event) => {
-              const target = event.target as HTMLSelectElement | null;
-              const value = target ? Number(target.value) : 8;
-              void setTopTagsLimit(value);
-            }}
-          >
-            <option value="5">5</option>
-            <option value="8">8</option>
-            <option value="12">12</option>
-          </select>
-        </div>
-        {#if hotkeyError}
-          <div class="settings-row error">{hotkeyError}</div>
-        {:else if settingsError}
-          <div class="settings-row error">{settingsError}</div>
-        {/if}
-      </section>
     {/if}
   </section>
 </main>
@@ -1447,26 +1551,6 @@
 
 .count {
   font-size: 12px;
-  color: #5f6f63;
-}
-
-.shortcut-toggle {
-  font-size: 11px;
-  border-radius: 999px;
-  padding: 4px 10px;
-  border: 1px solid rgba(134, 157, 140, 0.4);
-  background: transparent;
-  color: #5b6a60;
-  cursor: pointer;
-  font-family: inherit;
-}
-
-.shortcut-bar {
-  margin-top: 10px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px 16px;
-  font-size: 11px;
   color: #5f6f63;
 }
 
@@ -1696,28 +1780,36 @@
   z-index: 1;
 }
 
-.settings {
-  margin-top: 14px;
-  padding: 12px 14px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.65);
-  border: 1px solid rgba(134, 157, 140, 0.25);
+.settings-page {
+  margin-top: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
   position: relative;
   z-index: 1;
 }
 
-.settings-title {
-  font-weight: 600;
+.settings-section {
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.65);
+  border: 1px solid rgba(134, 157, 140, 0.25);
+}
+
+.settings-section-title {
+  font-weight: 700;
   font-size: 12px;
-  margin-bottom: 8px;
+  color: #3f5146;
+  margin-bottom: 10px;
 }
 
 .settings-row {
-  display: flex;
-  gap: 12px;
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 14px;
   font-size: 12px;
   color: #5b6a60;
-  margin-bottom: 6px;
+  margin-bottom: 10px;
 }
 
 .settings-row:last-child {
@@ -1725,26 +1817,72 @@
 }
 
 .settings-label {
-  min-width: 110px;
   color: #3f5146;
   font-weight: 600;
+  padding-top: 4px;
 }
 
-.settings-row.error {
-  color: #a34f3b;
+.settings-control {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.settings-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.settings-inline {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.settings-hint {
+  font-size: 11px;
+  color: #6a7a6f;
+}
+
+.settings-message {
+  font-size: 12px;
   font-weight: 600;
+  color: #a34f3b;
+  margin-left: 140px;
+}
+
+.settings-value {
+  font-size: 12px;
+  color: #4a5b51;
+  word-break: break-all;
+}
+
+.segment {
+  display: inline-flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.segment-item {
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 999px;
+}
+
+.shortcut-list {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  font-size: 11px;
+  color: #5f6f63;
 }
 
 .tiny {
   padding: 4px 10px;
   font-size: 11px;
-}
-
-.hotkey {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
 }
 
 .hotkey-input {
@@ -1790,6 +1928,13 @@
   box-shadow: 0 8px 18px rgba(45, 106, 87, 0.2);
 }
 
+.panel button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
 .empty,
 .preview-empty {
   padding: 16px;
@@ -1832,6 +1977,14 @@
 @media (max-width: 720px) {
   .content {
     grid-template-columns: 1fr;
+  }
+
+  .settings-row {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-message {
+    margin-left: 0;
   }
 
   .panel-footer {
