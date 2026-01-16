@@ -352,6 +352,20 @@
     status = "Path copied";
   }
 
+  async function copyTags(prompt: PromptEntry | null | undefined) {
+    if (!prompt) {
+      return;
+    }
+    if (!prompt.tags?.length) {
+      status = "No tags to copy";
+      return;
+    }
+    const tagString = prompt.tags.map((tag) => `#${tag}`).join(" ");
+    await writeText(tagString);
+    await markRecent(prompt);
+    status = "Tags copied";
+  }
+
   async function copySnippet(prompt: PromptEntry | null | undefined) {
     if (!prompt) {
       return;
@@ -1163,6 +1177,9 @@
             </button>
             <button class="ghost" type="button" onclick={() => copyPath(activePrompt)}>
               Copy Path
+            </button>
+            <button class="ghost" type="button" onclick={() => copyTags(activePrompt)}>
+              Copy Tags
             </button>
             <button class="ghost" type="button" onclick={() => copySnippet(activePrompt)}>
               Copy Snippet

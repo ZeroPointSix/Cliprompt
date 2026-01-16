@@ -195,3 +195,8 @@
 
 - [x] Add a collapsible shortcuts legend under the search bar.
 - [x] Run `npm run check` after code updates.
+
+## Iteration 39 (Copy tags)
+
+- [x] Add a copy-tags action in the preview pane.
+- [x] Run `npm run check` after code updates.

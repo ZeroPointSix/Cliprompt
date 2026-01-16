@@ -44,3 +44,4 @@
 - Added an auto indicator when top-tags scope is overridden by filters.
 - Allowed configuring how many top tags are shown.
 - Added a collapsible shortcuts legend under the search bar.
+- Added a copy-tags action in the preview pane.
