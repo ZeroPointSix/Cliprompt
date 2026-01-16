@@ -365,6 +365,29 @@
     showSettings = !showSettings;
   }
 
+  function normalizeTagToken(tag: string) {
+    return `#${tag.toLowerCase()}`;
+  }
+
+  function isTagActive(tag: string) {
+    const token = normalizeTagToken(tag);
+    return query
+      .split(/\s+/)
+      .some((part) => part.toLowerCase() === token);
+  }
+
+  function toggleTagFilter(tag: string) {
+    const token = normalizeTagToken(tag);
+    const parts = query.split(/\s+/).filter(Boolean);
+    const hasTag = parts.some((part) => part.toLowerCase() === token);
+    const filtered = parts.filter((part) => part.toLowerCase() !== token);
+    const next = hasTag ? filtered : [...filtered, token];
+    query = next.join(" ").trim();
+    selectedIndex = 0;
+    void refreshResults();
+    focusSearch();
+  }
+
   function getRowPreview(prompt: PromptEntry) {
     const terms = extractTerms(query);
     if (terms.length === 0) {
@@ -684,7 +707,17 @@
                     {#if item.prompt.tags?.length}
                       <div class="tags">
                         {#each item.prompt.tags as tag}
-                          <span class="tag">#{tag}</span>
+                          <button
+                            class="tag"
+                            class:active={isTagActive(tag)}
+                            type="button"
+                            onclick={(event) => {
+                              event.stopPropagation();
+                              toggleTagFilter(tag);
+                            }}
+                          >
+                            #{tag}
+                          </button>
                         {/each}
                       </div>
                     {/if}
@@ -704,7 +737,7 @@
                     </button>
                   </div>
               </div>
-              <div class="row-preview">{getRowPreview(item.prompt)}</div>
+              <div class="row-preview">{@html getRowPreviewHtml(item.prompt)}</div>
             </div>
           {/each}
           {/if}
@@ -736,7 +769,17 @@
                     {#if item.prompt.tags?.length}
                       <div class="tags">
                         {#each item.prompt.tags as tag}
-                          <span class="tag">#{tag}</span>
+                          <button
+                            class="tag"
+                            class:active={isTagActive(tag)}
+                            type="button"
+                            onclick={(event) => {
+                              event.stopPropagation();
+                              toggleTagFilter(tag);
+                            }}
+                          >
+                            #{tag}
+                          </button>
                         {/each}
                       </div>
                     {/if}
@@ -756,7 +799,7 @@
                     </button>
                   </div>
               </div>
-              <div class="row-preview">{getRowPreview(item.prompt)}</div>
+              <div class="row-preview">{@html getRowPreviewHtml(item.prompt)}</div>
             </div>
           {/each}
           {/if}
@@ -787,9 +830,19 @@
                     <span>{item.prompt.title}</span>
                     {#if item.prompt.tags?.length}
                       <div class="tags">
-                        {#each item.prompt.tags as tag}
-                          <span class="tag">#{tag}</span>
-                        {/each}
+                          {#each item.prompt.tags as tag}
+                            <button
+                              class="tag"
+                              class:active={isTagActive(tag)}
+                              type="button"
+                              onclick={(event) => {
+                                event.stopPropagation();
+                                toggleTagFilter(tag);
+                              }}
+                            >
+                              #{tag}
+                            </button>
+                          {/each}
                       </div>
                     {/if}
                   </div>
@@ -808,7 +861,7 @@
                     </button>
                   </div>
               </div>
-              <div class="row-preview">{getRowPreview(item.prompt)}</div>
+            <div class="row-preview">{@html getRowPreviewHtml(item.prompt)}</div>
             </div>
           {/each}
           {/if}
@@ -839,7 +892,17 @@
                   {#if prompt.tags?.length}
                     <div class="tags">
                       {#each prompt.tags as tag}
-                        <span class="tag">#{tag}</span>
+                        <button
+                          class="tag"
+                          class:active={isTagActive(tag)}
+                          type="button"
+                          onclick={(event) => {
+                            event.stopPropagation();
+                            toggleTagFilter(tag);
+                          }}
+                        >
+                          #{tag}
+                        </button>
                       {/each}
                     </div>
                   {/if}
@@ -1204,6 +1267,14 @@
   color: #3e6b5b;
   padding: 2px 6px;
   border-radius: 999px;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.tag.active {
+  background: rgba(221, 243, 232, 0.9);
+  color: #2d6a57;
 }
 
 .fav-toggle {

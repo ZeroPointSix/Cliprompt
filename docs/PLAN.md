@@ -130,3 +130,8 @@
 
 - [x] Highlight matched terms in list snippets.
 - [x] Run `npm run check` after code updates.
+
+## Iteration 26 (Tag filters)
+
+- [x] Make tag chips clickable to toggle #tag filters.
+- [x] Run `npm run check` after code updates.

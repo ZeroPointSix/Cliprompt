@@ -31,3 +31,4 @@
 - Added a copy-snippet action in the preview panel.
 - Added a Ctrl+Shift+G shortcut to toggle favorites filter.
 - Highlighted matched terms in list snippets.
+- Made tag chips clickable to toggle #tag filters.
