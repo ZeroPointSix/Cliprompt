@@ -214,6 +214,17 @@ fn set_top_tags_limit(
 }
 
 #[tauri::command]
+fn set_show_shortcuts_hint(
+    app: AppHandle,
+    state: State<Arc<AppState>>,
+    show_shortcuts_hint: bool,
+) -> Result<(), String> {
+    let mut config = state.config.lock().unwrap();
+    config.show_shortcuts_hint = show_shortcuts_hint;
+    save(&app, &config)
+}
+
+#[tauri::command]
 fn clear_recent(
     app: AppHandle,
     state: State<Arc<AppState>>,
@@ -458,6 +469,7 @@ pub fn run() {
             set_recent_enabled,
             set_top_tags_scope,
             set_top_tags_limit,
+            set_show_shortcuts_hint,
             clear_recent,
             capture_active_window,
             focus_last_window

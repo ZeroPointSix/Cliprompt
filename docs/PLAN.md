@@ -205,3 +205,8 @@
 
 - [x] Add a reset action that clears search, tags, and list filters.
 - [x] Run `npm run check` after code updates.
+
+## Iteration 41 (Shortcuts hint)
+
+- [x] Auto-expand the shortcuts legend on first launch.
+- [x] Run `npm run check` after code updates.

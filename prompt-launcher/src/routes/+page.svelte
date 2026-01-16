@@ -28,6 +28,7 @@
     recent_meta: Record<string, number>;
     top_tags_use_results: boolean;
     top_tags_limit: number;
+    show_shortcuts_hint: boolean;
   };
 
   type RecentState = {
@@ -50,7 +51,8 @@
     recent_enabled: true,
     recent_meta: {},
     top_tags_use_results: false,
-    top_tags_limit: 8
+    top_tags_limit: 8,
+    show_shortcuts_hint: true
   });
   let selectedIndex = $state<number>(0);
   let status = $state<string>("");
@@ -105,6 +107,11 @@
     config = await invoke<AppConfig>("get_config");
     hotkeyDraft = config.hotkey;
     allPrompts = await invoke<PromptEntry[]>("list_prompts");
+    if (config.show_shortcuts_hint) {
+      showShortcuts = true;
+      await invoke("set_show_shortcuts_hint", { showShortcutsHint: false });
+      config = { ...config, show_shortcuts_hint: false };
+    }
     await registerHotkey(config.hotkey);
     await refreshResults();
 
