@@ -6,47 +6,22 @@ Minimal Windows prompt manager that stays local, is file driven, and pastes into
 
 - Global hotkey toggle (default `Alt+Space`)
 - Instant search over `.md` / `.txt` files
-- Auto paste with optional copy-only mode
+- Auto paste with optional copy-only flow
 - Folder watcher for hot reload
 - Right click to open source file
 - Quick open for the prompts folder
 - Tray menu with show/hide/quit
 - Optional start with Windows
 - Rust-side fuzzy ranking for large prompt sets
-- Copy-only quick action in preview
-- Copy-title action for snippet titles
 - Dedicated settings page with hotkey guidance
-- Favorites toggle with quick filter
-- Favorite toggle shortcut: Ctrl+Shift+F
+- Lightweight search-first launcher UI
+- Favorites toggle shortcut: Ctrl+Shift+F
 - Favorites filter shortcut: Ctrl+Shift+G
-- Favorites count displayed in the header
-- Favorites section pinned at the top of the list
-- Improved fuzzy ranking with term and boundary scoring
-- Filter mode chip in the header
-- Copy-path action in the preview panel
-- Recent section pinned at the top of the list
-- Recent filter toggle and clear action
-- Recent filter limits results to recently used prompts
-- Matched snippets in list rows while searching
-- Matched-term highlights in list snippets
-- Clickable tag chips to toggle #tag filters
-- Matched-term highlights in the preview pane
-- Top tags bar for quick #tag filtering
-- Clear all #tag filters button
-- Top tags scope toggle (all prompts vs results, saved)
-- Top tags scope shortcut: Ctrl+Shift+S
-- Reset filters button (clears search, tags, and list filters)
-- Top tags scope auto-switches when Favorites/Recent filters are active
-- Auto indicator shown when top-tags scope is overridden
-- Configurable top tags count (5/8/12/16)
-- Collapsible shortcuts legend in settings
-- Shortcuts legend auto-expands on first open
-- Copy tags action in the preview pane
-- Chinese UI text (default)
+- Recent filter shortcut: Ctrl+Shift+E
 - Clear recent shortcut: Ctrl+Shift+R
-- Toggle recent filter shortcut: Ctrl+Shift+E
-- Last-used timestamp in the preview panel
-- Copy-snippet action in the preview panel
+- Matched snippets in list rows while searching
+- Clickable tag filters via #tag input
+- Chinese UI text (default)
 
 ## Quickstart
 

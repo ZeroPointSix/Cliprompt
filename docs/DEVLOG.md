@@ -51,3 +51,6 @@
 - Translated UI strings and seed prompts to Chinese.
 - Added the initial code review report to docs.
 - Replaced the settings drawer with a traditional settings page and moved shortcuts there.
+- Simplified the launcher UI to a lightweight search-first layout.
+- Prevented tray right-click from toggling the window.
+- Set tray menu labels to Chinese and updated the window title on launch.

@@ -39,7 +39,7 @@
   const appWindow = getCurrentWindow();
   const maxResults = 8;
 
-  let searchInput: HTMLInputElement | null = null;
+  let searchInput = $state<HTMLInputElement | null>(null);
   let query = $state<string>("");
   let config = $state<AppConfig>({
     prompts_dir: "",
@@ -104,6 +104,7 @@
   });
 
   onMount(async () => {
+    document.title = "提示词启动器";
     config = await invoke<AppConfig>("get_config");
     hotkeyDraft = config.hotkey;
     allPrompts = await invoke<PromptEntry[]>("list_prompts");
@@ -813,19 +814,8 @@
         <div class="title">
           <span class="name">提示词启动器</span>
           <span class="meta">快捷键：{config.hotkey}</span>
-          <span class="meta">目录：{config.prompts_dir || "未设置"}</span>
-          <span class="meta">收藏：{config.favorites.length}</span>
-          <span class="filter-chip" class:active={showFavorites}>
-            {showFavorites ? "仅收藏" : "全部提示词"}
-          </span>
         </div>
         <div class="actions">
-          <button class="ghost" class:active={showFavorites} type="button" onclick={toggleFavoritesFilter}>
-            {showFavorites ? "全部提示词" : `收藏 (${config.favorites.length})`}
-          </button>
-          <button class="ghost" class:active={showRecent} type="button" onclick={toggleRecentFilter}>
-            {showRecent ? "全部提示词" : `最近 (${config.recent_ids.length})`}
-          </button>
           <button class="ghost" type="button" onclick={toggleSettings}>
             设置
           </button>
@@ -1017,7 +1007,7 @@
         </div>
       </section>
     {:else}
-    <div class="search">
+    <div class="search search-compact">
       <span class="search-icon">/</span>
       <input
         bind:this={searchInput}
@@ -1030,362 +1020,67 @@
       <span class="count">{filtered.length}</span>
     </div>
 
-    {#if topTags.length > 0 || hasTagFilters() || config.top_tags_use_results}
-      <div class="tag-bar">
-        <span class="tag-bar-label">热门标签</span>
-        <button
-          class="tag-scope"
-          class:active={config.top_tags_use_results}
-          type="button"
-          onclick={(event) => {
-            event.stopPropagation();
-            toggleTopTagsScope();
-          }}
-        >
-          {config.top_tags_use_results ? "范围：结果" : "范围：全部"}
-        </button>
-        {#if topTagsScopeBeforeFilter !== null}
-          <span class="tag-auto">自动</span>
-        {/if}
-        {#if hasTagFilters()}
-          <button
-            class="tag-clear"
-            type="button"
-            onclick={(event) => {
-              event.stopPropagation();
-              clearTagFilters();
-            }}
-          >
-            清除标签
-          </button>
-        {/if}
-        {#if hasAnyFilters()}
-          <button
-            class="tag-clear"
-            type="button"
-            onclick={(event) => {
-              event.stopPropagation();
-              resetAllFilters();
-            }}
-          >
-            重置筛选
-          </button>
-        {/if}
-        {#each topTags as item (item.tag)}
-          <button
-            class="tag"
-            class:active={isTagActive(item.tag)}
-            type="button"
-            onclick={(event) => {
-              event.stopPropagation();
-              toggleTagFilter(item.tag);
-            }}
-          >
-            #{item.tag}<span class="tag-count">{item.count}</span>
-          </button>
-        {/each}
-      </div>
-    {/if}
-
-    <div class="content">
-      <div class="list">
-        {#if filtered.length === 0}
-          <div class="empty">
-            <span>暂无匹配</span>
-            <span class="hint">试试 #sql 这样的标签</span>
-          </div>
-        {:else if !showFavorites && !showRecent && (recentList.length > 0 || favoritesList.length > 0)}
-          {#if recentList.length > 0}
-            <div class="section-label">最近</div>
-            {#each recentList as item (item.prompt.id)}
-              <div
-                class:selected={item.index === selectedIndex}
-                class="row"
-                style={`--i: ${item.index}`}
-                role="button"
-                tabindex="0"
-                onclick={() => (selectedIndex = item.index)}
-                ondblclick={() => usePrompt(item.prompt)}
-                onkeydown={(event) => {
-                  if (event.key === "Enter" || event.key === " ") {
-                    event.preventDefault();
-                    usePrompt(item.prompt);
-                  }
-                }}
-                oncontextmenu={(event) => {
-                  event.preventDefault();
-                  openPrompt(item.prompt);
-                }}
-              >
-                <div class="row-title">
-                  <div class="row-heading">
-                    <span>{item.prompt.title}</span>
-                    {#if item.prompt.tags?.length}
-                      <div class="tags">
-                        {#each item.prompt.tags as tag}
-                          <button
-                            class="tag"
-                            class:active={isTagActive(tag)}
-                            type="button"
-                            onclick={(event) => {
-                              event.stopPropagation();
-                              toggleTagFilter(tag);
-                            }}
-                          >
-                            #{tag}
-                          </button>
-                        {/each}
-                      </div>
-                    {/if}
-                  </div>
-                  <div class="row-actions">
-                    <button
-                      class="fav-toggle"
-                      class:active={isFavorite(item.prompt)}
-                      type="button"
-                      aria-pressed={isFavorite(item.prompt)}
-                      onclick={(event) => {
-                        event.stopPropagation();
-                        toggleFavorite(item.prompt);
-                      }}
-                    >
-                      收藏
-                    </button>
-                  </div>
-              </div>
-              <div class="row-preview">{@html getRowPreviewHtml(item.prompt)}</div>
-            </div>
-          {/each}
-          {/if}
-          {#if favoritesList.length > 0}
-            <div class="section-label">收藏</div>
-            {#each favoritesList as item (item.prompt.id)}
-              <div
-                class:selected={item.index === selectedIndex}
-                class="row"
-                style={`--i: ${item.index}`}
-                role="button"
-                tabindex="0"
-                onclick={() => (selectedIndex = item.index)}
-                ondblclick={() => usePrompt(item.prompt)}
-                onkeydown={(event) => {
-                  if (event.key === "Enter" || event.key === " ") {
-                    event.preventDefault();
-                    usePrompt(item.prompt);
-                  }
-                }}
-                oncontextmenu={(event) => {
-                  event.preventDefault();
-                  openPrompt(item.prompt);
-                }}
-              >
-                <div class="row-title">
-                  <div class="row-heading">
-                    <span>{item.prompt.title}</span>
-                    {#if item.prompt.tags?.length}
-                      <div class="tags">
-                        {#each item.prompt.tags as tag}
-                          <button
-                            class="tag"
-                            class:active={isTagActive(tag)}
-                            type="button"
-                            onclick={(event) => {
-                              event.stopPropagation();
-                              toggleTagFilter(tag);
-                            }}
-                          >
-                            #{tag}
-                          </button>
-                        {/each}
-                      </div>
-                    {/if}
-                  </div>
-                  <div class="row-actions">
-                    <button
-                      class="fav-toggle"
-                      class:active={isFavorite(item.prompt)}
-                      type="button"
-                      aria-pressed={isFavorite(item.prompt)}
-                      onclick={(event) => {
-                        event.stopPropagation();
-                        toggleFavorite(item.prompt);
-                      }}
-                    >
-                      收藏
-                    </button>
-                  </div>
-              </div>
-              <div class="row-preview">{@html getRowPreviewHtml(item.prompt)}</div>
-            </div>
-          {/each}
-          {/if}
-          {#if regularList.length > 0}
-            <div class="section-label">全部提示词</div>
-            {#each regularList as item (item.prompt.id)}
-              <div
-                class:selected={item.index === selectedIndex}
-                class="row"
-                style={`--i: ${item.index}`}
-                role="button"
-                tabindex="0"
-                onclick={() => (selectedIndex = item.index)}
-                ondblclick={() => usePrompt(item.prompt)}
-                onkeydown={(event) => {
-                  if (event.key === "Enter" || event.key === " ") {
-                    event.preventDefault();
-                    usePrompt(item.prompt);
-                  }
-                }}
-                oncontextmenu={(event) => {
-                  event.preventDefault();
-                  openPrompt(item.prompt);
-                }}
-              >
-                <div class="row-title">
-                  <div class="row-heading">
-                    <span>{item.prompt.title}</span>
-                    {#if item.prompt.tags?.length}
-                      <div class="tags">
-                          {#each item.prompt.tags as tag}
-                            <button
-                              class="tag"
-                              class:active={isTagActive(tag)}
-                              type="button"
-                              onclick={(event) => {
-                                event.stopPropagation();
-                                toggleTagFilter(tag);
-                              }}
-                            >
-                              #{tag}
-                            </button>
-                          {/each}
-                      </div>
-                    {/if}
-                  </div>
-                  <div class="row-actions">
-                    <button
-                      class="fav-toggle"
-                      class:active={isFavorite(item.prompt)}
-                      type="button"
-                      aria-pressed={isFavorite(item.prompt)}
-                      onclick={(event) => {
-                        event.stopPropagation();
-                        toggleFavorite(item.prompt);
-                      }}
-                    >
-                      收藏
-                    </button>
-                  </div>
-              </div>
-            <div class="row-preview">{@html getRowPreviewHtml(item.prompt)}</div>
-            </div>
-          {/each}
-          {/if}
-        {:else}
-          {#each filtered as prompt, index (prompt.id)}
-            <div
-              class:selected={index === selectedIndex}
-              class="row"
-              style={`--i: ${index}`}
-              role="button"
-              tabindex="0"
-              onclick={() => (selectedIndex = index)}
-              ondblclick={() => usePrompt(prompt)}
-              onkeydown={(event) => {
-                if (event.key === "Enter" || event.key === " ") {
-                  event.preventDefault();
-                  usePrompt(prompt);
-                }
-              }}
-              oncontextmenu={(event) => {
+    <div class="list list-compact">
+      {#if filtered.length === 0}
+        <div class="empty">
+          <span>暂无匹配</span>
+          <span class="hint">试试 #sql 这样的标签</span>
+        </div>
+      {:else}
+        {#each filtered as prompt, index (prompt.id)}
+          <div
+            class:selected={index === selectedIndex}
+            class="row row-compact"
+            style={`--i: ${index}`}
+            role="button"
+            tabindex="0"
+            onclick={() => (selectedIndex = index)}
+            ondblclick={() => usePrompt(prompt)}
+            onkeydown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
                 event.preventDefault();
-                openPrompt(prompt);
-              }}
-            >
-              <div class="row-title">
-                <div class="row-heading">
-                  <span>{prompt.title}</span>
-                  {#if prompt.tags?.length}
-                    <div class="tags">
-                      {#each prompt.tags as tag}
-                        <button
-                          class="tag"
-                          class:active={isTagActive(tag)}
-                          type="button"
-                          onclick={(event) => {
-                            event.stopPropagation();
-                            toggleTagFilter(tag);
-                          }}
-                        >
-                          #{tag}
-                        </button>
-                      {/each}
-                    </div>
-                  {/if}
-                </div>
-                <div class="row-actions">
-                  <button
-                    class="fav-toggle"
-                    class:active={isFavorite(prompt)}
-                    type="button"
-                    aria-pressed={isFavorite(prompt)}
-                    onclick={(event) => {
-                      event.stopPropagation();
-                      toggleFavorite(prompt);
-                    }}
-                  >
-                    收藏
-                  </button>
-                </div>
+                usePrompt(prompt);
+              }
+            }}
+            oncontextmenu={(event) => {
+              event.preventDefault();
+              openPrompt(prompt);
+            }}
+          >
+            <div class="row-title">
+              <div class="row-heading">
+                <span class="row-name">{prompt.title}</span>
+                {#if prompt.tags?.length}
+                  <div class="tags">
+                    {#each prompt.tags as tag}
+                      <button
+                        class="tag"
+                        class:active={isTagActive(tag)}
+                        type="button"
+                        onclick={(event) => {
+                          event.stopPropagation();
+                          toggleTagFilter(tag);
+                        }}
+                      >
+                        #{tag}
+                      </button>
+                    {/each}
+                  </div>
+                {/if}
               </div>
-              <div class="row-preview">{@html getRowPreviewHtml(prompt)}</div>
             </div>
-          {/each}
-        {/if}
-      </div>
-
-      <aside class="preview">
-        {#if activePrompt}
-          <div class="preview-title">{activePrompt.title}</div>
-          <div class="preview-meta">上次使用：{formatLastUsed(activePrompt)}</div>
-          <div class="preview-body">{@html getPreviewBodyHtml(activePrompt)}</div>
-          <div class="preview-actions">
-            <button type="button" onclick={() => usePrompt(activePrompt)}>
-              粘贴
-            </button>
-            <button class="ghost" type="button" onclick={() => copyPrompt(activePrompt)}>
-              复制
-            </button>
-            <button class="ghost" type="button" onclick={() => copyTitle(activePrompt)}>
-              复制标题
-            </button>
-            <button class="ghost" type="button" onclick={() => copyPath(activePrompt)}>
-              复制路径
-            </button>
-            <button class="ghost" type="button" onclick={() => copyTags(activePrompt)}>
-              复制标签
-            </button>
-            <button class="ghost" type="button" onclick={() => copySnippet(activePrompt)}>
-              复制片段
-            </button>
-            <button class="ghost" type="button" onclick={() => openPrompt(activePrompt)}>
-              打开文件
-            </button>
+            <div class="row-preview">{@html getRowPreviewHtml(prompt)}</div>
           </div>
-        {:else}
-          <div class="preview-empty">
-            <span>请选择提示词预览</span>
-          </div>
-        {/if}
-      </aside>
+        {/each}
+      {/if}
     </div>
 
-    <footer class="panel-footer">
+    <footer class="panel-footer panel-footer-compact">
       <div class="status">
         {#if status}
           <span>{status}</span>
         {:else}
-          <span>Enter：粘贴，右键：打开文件，Ctrl+Shift+F：收藏，Ctrl+Shift+G：收藏过滤，Ctrl+Shift+R：清空最近，Ctrl+Shift+E：最近过滤，Ctrl+Shift+S：标签范围</span>
+          <span>Enter：粘贴，Esc：隐藏，右键：打开文件</span>
         {/if}
       </div>
     </footer>
@@ -1420,10 +1115,10 @@
 }
 
 .panel {
-  width: min(820px, 92vw);
+  width: min(640px, 92vw);
   background: rgba(255, 255, 255, 0.76);
   border-radius: 22px;
-  padding: 24px;
+  padding: 20px;
   box-shadow:
     0 30px 80px rgba(36, 57, 46, 0.18),
     inset 0 1px 0 rgba(255, 255, 255, 0.6);
@@ -1478,21 +1173,6 @@
   color: #607063;
 }
 
-.filter-chip {
-  font-size: 11px;
-  padding: 3px 10px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.7);
-  border: 1px solid rgba(87, 107, 95, 0.3);
-  color: #5b6a60;
-  width: fit-content;
-}
-
-.filter-chip.active {
-  background: rgba(221, 243, 232, 0.75);
-  border-color: rgba(61, 108, 90, 0.6);
-  color: #2d6a57;
-}
 
 .actions {
   display: flex;
@@ -1524,7 +1204,7 @@
 }
 
 .search {
-  margin-top: 18px;
+  margin-top: 14px;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -1534,6 +1214,10 @@
   border: 1px solid rgba(134, 157, 140, 0.3);
   position: relative;
   z-index: 1;
+}
+
+.search-compact {
+  padding: 8px 12px;
 }
 
 .search-icon {
@@ -1554,78 +1238,19 @@
   color: #5f6f63;
 }
 
-.tag-bar {
-  margin-top: 10px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.tag-bar-label {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: #708075;
-}
-
-.tag-count {
-  margin-left: 4px;
-  font-size: 9px;
-  opacity: 0.6;
-}
-
-.tag-scope {
-  font-size: 11px;
-  border-radius: 999px;
-  padding: 3px 8px;
-  border: 1px solid rgba(134, 157, 140, 0.4);
-  background: transparent;
-  color: #5b6a60;
-  cursor: pointer;
-  font-family: inherit;
-}
-
-.tag-scope.active {
-  background: rgba(221, 243, 232, 0.9);
-  border-color: rgba(61, 108, 90, 0.6);
-  color: #2d6a57;
-}
-
-.tag-auto {
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: #708075;
-}
-
-.tag-clear {
-  font-size: 11px;
-  border-radius: 999px;
-  padding: 3px 8px;
-  border: 1px solid rgba(134, 157, 140, 0.4);
-  background: transparent;
-  color: #5b6a60;
-  cursor: pointer;
-  font-family: inherit;
-}
-
-.content {
-  display: grid;
-  grid-template-columns: 1.15fr 0.85fr;
-  gap: 18px;
-  margin-top: 18px;
-  position: relative;
-  z-index: 1;
-}
 
 .list {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  max-height: 240px;
+  margin-top: 12px;
+  max-height: 320px;
   overflow-y: auto;
   padding-right: 6px;
+}
+
+.list-compact {
+  max-height: 360px;
 }
 
 .row {
@@ -1637,6 +1262,10 @@
   transition: 0.2s ease;
   animation: fadeUp 0.35s ease both;
   animation-delay: calc(var(--i) * 40ms);
+}
+
+.row-compact {
+  padding: 10px 12px;
 }
 
 .row.selected {
@@ -1652,6 +1281,10 @@
   font-size: 14px;
 }
 
+.row-name {
+  font-weight: 600;
+}
+
 .row-heading {
   display: flex;
   align-items: center;
@@ -1659,19 +1292,6 @@
   flex-wrap: wrap;
 }
 
-.row-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.section-label {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: #708075;
-  padding: 4px 8px 2px;
-}
 
 .row-preview {
   margin-top: 6px;
@@ -1686,12 +1306,6 @@
   border-radius: 4px;
 }
 
-:global(.preview-body mark) {
-  background: rgba(255, 230, 150, 0.85);
-  color: #4a3f1f;
-  padding: 0 2px;
-  border-radius: 4px;
-}
 
 .tags {
   display: flex;
@@ -1715,69 +1329,19 @@
   color: #2d6a57;
 }
 
-.fav-toggle {
-  border: 1px solid rgba(87, 107, 95, 0.4);
-  background: transparent;
-  color: #375046;
-  font-size: 11px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  cursor: pointer;
-}
-
-.fav-toggle.active {
-  background: rgba(221, 243, 232, 0.9);
-  border-color: rgba(61, 108, 90, 0.6);
-  color: #2d6a57;
-}
-
-.fav-toggle:hover {
-  transform: none;
-  box-shadow: none;
-}
-
-.preview {
-  background: rgba(255, 255, 255, 0.6);
-  border-radius: 16px;
-  padding: 14px;
-  border: 1px solid rgba(134, 157, 140, 0.25);
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  max-height: 240px;
-}
-
-.preview-title {
-  font-weight: 700;
-  font-size: 14px;
-}
-
-.preview-meta {
-  font-size: 11px;
-  color: #6c7a70;
-}
-
-.preview-body {
-  font-size: 12px;
-  color: #4a5b51;
-  overflow-y: auto;
-  white-space: pre-wrap;
-}
-
-.preview-actions {
-  margin-top: auto;
-  display: flex;
-  gap: 10px;
-}
 
 .panel-footer {
-  margin-top: 18px;
+  margin-top: 12px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
   position: relative;
   z-index: 1;
+}
+
+.panel-footer-compact {
+  justify-content: flex-start;
 }
 
 .settings-page {
@@ -1935,8 +1499,7 @@
   box-shadow: none;
 }
 
-.empty,
-.preview-empty {
+.empty {
   padding: 16px;
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.6);
@@ -1975,10 +1538,6 @@
 }
 
 @media (max-width: 720px) {
-  .content {
-    grid-template-columns: 1fr;
-  }
-
   .settings-row {
     grid-template-columns: 1fr;
   }

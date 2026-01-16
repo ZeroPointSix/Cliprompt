@@ -231,3 +231,15 @@
 - [x] Replace the settings drawer with a traditional settings page.
 - [x] Move the shortcuts legend into settings.
 - [x] Run `npm run check` after code updates.
+
+## Iteration 46 (Lightweight launcher)
+
+- [x] Simplify the main UI into a lightweight search-first layout.
+- [x] Prevent tray right-click from toggling the window.
+- [x] Run `npm run check` after code updates.
+
+## Iteration 47 (Chinese labels polish)
+
+- [x] Use Chinese labels for tray menu items.
+- [x] Set the window title to Chinese on launch.
+- [x] Run `npm run check` after code updates.

@@ -14,7 +14,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use std::time::Duration;
 use tauri::{
     menu::{Menu, MenuItem},
-    tray::{TrayIconBuilder, TrayIconEvent},
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     AppHandle, Manager, State,
 };
 use tauri::Emitter;
@@ -314,11 +314,11 @@ fn toggle_main_window(app: &AppHandle) -> Result<(), String> {
 }
 
 fn init_tray(app: &tauri::App) -> Result<(), String> {
-    let show = MenuItem::with_id(app, "show", "Show", true, None::<&str>)
+    let show = MenuItem::with_id(app, "show", "显示", true, None::<&str>)
         .map_err(|e| format!("menu item failed: {e}"))?;
-    let hide = MenuItem::with_id(app, "hide", "Hide", true, None::<&str>)
+    let hide = MenuItem::with_id(app, "hide", "隐藏", true, None::<&str>)
         .map_err(|e| format!("menu item failed: {e}"))?;
-    let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)
+    let quit = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)
         .map_err(|e| format!("menu item failed: {e}"))?;
     let menu = Menu::with_items(app, &[&show, &hide, &quit])
         .map_err(|e| format!("menu build failed: {e}"))?;
@@ -345,11 +345,18 @@ fn init_tray(app: &tauri::App) -> Result<(), String> {
             _ => {}
         })
         .on_tray_icon_event(|tray, event| {
-            if matches!(event, TrayIconEvent::Click { .. }) {
-                let app = tray.app_handle();
-                let state = app.state::<Arc<AppState>>();
-                let _ = store_active_window(state.inner());
-                let _ = toggle_main_window(&app);
+            if let TrayIconEvent::Click {
+                button,
+                button_state,
+                ..
+            } = event
+            {
+                if button == MouseButton::Left && button_state == MouseButtonState::Up {
+                    let app = tray.app_handle();
+                    let state = app.state::<Arc<AppState>>();
+                    let _ = store_active_window(state.inner());
+                    let _ = toggle_main_window(&app);
+                }
             }
         })
         .build(app)
