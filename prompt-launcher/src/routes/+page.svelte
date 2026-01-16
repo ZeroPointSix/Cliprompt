@@ -26,6 +26,7 @@
     recent_ids: string[];
     recent_enabled: boolean;
     recent_meta: Record<string, number>;
+    top_tags_use_results: boolean;
   };
 
   type RecentState = {
@@ -46,7 +47,8 @@
     favorites: [],
     recent_ids: [],
     recent_enabled: true,
-    recent_meta: {}
+    recent_meta: {},
+    top_tags_use_results: false
   });
   let selectedIndex = $state<number>(0);
   let status = $state<string>("");
@@ -61,7 +63,6 @@
   let filtered = $state<PromptEntry[]>([]);
   let allPrompts = $state<PromptEntry[]>([]);
   let topTags = $state<{ tag: string; count: number }[]>([]);
-  let topTagsUseResults = $state<boolean>(false);
   let activePrompt = $state<PromptEntry | null>(null);
   let recentList = $state<{ prompt: PromptEntry; index: number }[]>([]);
   let favoritesList = $state<{ prompt: PromptEntry; index: number }[]>([]);
@@ -372,6 +373,12 @@
     showSettings = !showSettings;
   }
 
+  async function toggleTopTagsScope() {
+    const nextValue = !config.top_tags_use_results;
+    config = { ...config, top_tags_use_results: nextValue };
+    await invoke("set_top_tags_scope", { useResults: nextValue });
+  }
+
   function buildTopTags(prompts: PromptEntry[], limit: number) {
     const counts = new Map<string, number>();
     prompts.forEach((prompt) => {
@@ -391,7 +398,7 @@
   }
 
   function getTagSource() {
-    if (topTagsUseResults) {
+    if (config.top_tags_use_results) {
       return filtered;
     }
     if (showFavorites) {
@@ -742,19 +749,19 @@
       <span class="count">{filtered.length}</span>
     </div>
 
-    {#if topTags.length > 0 || hasTagFilters() || topTagsUseResults}
+    {#if topTags.length > 0 || hasTagFilters() || config.top_tags_use_results}
       <div class="tag-bar">
         <span class="tag-bar-label">Top tags</span>
         <button
           class="tag-scope"
-          class:active={topTagsUseResults}
+          class:active={config.top_tags_use_results}
           type="button"
           onclick={(event) => {
             event.stopPropagation();
-            topTagsUseResults = !topTagsUseResults;
+            toggleTopTagsScope();
           }}
         >
-          {topTagsUseResults ? "Scope: Results" : "Scope: All"}
+          {config.top_tags_use_results ? "Scope: Results" : "Scope: All"}
         </button>
         {#if hasTagFilters()}
           <button

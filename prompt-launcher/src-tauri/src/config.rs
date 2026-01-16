@@ -19,6 +19,8 @@ pub struct AppConfig {
     pub recent_enabled: bool,
     #[serde(default)]
     pub recent_meta: HashMap<String, i64>,
+    #[serde(default)]
+    pub top_tags_use_results: bool,
 }
 
 impl Default for AppConfig {
@@ -32,6 +34,7 @@ impl Default for AppConfig {
             recent_ids: Vec::new(),
             recent_enabled: true,
             recent_meta: HashMap::new(),
+            top_tags_use_results: false,
         }
     }
 }

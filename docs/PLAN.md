@@ -160,3 +160,8 @@
 
 - [x] Add a scope toggle for top-tags (all vs results).
 - [x] Run `npm run check` after code updates.
+
+## Iteration 32 (Top tags scope persistence)
+
+- [x] Persist the top-tags scope toggle in config.
+- [x] Run `npm run check` after code updates.

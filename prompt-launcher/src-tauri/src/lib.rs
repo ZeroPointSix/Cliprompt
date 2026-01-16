@@ -191,6 +191,17 @@ fn set_recent_enabled(
 }
 
 #[tauri::command]
+fn set_top_tags_scope(
+    app: AppHandle,
+    state: State<Arc<AppState>>,
+    use_results: bool,
+) -> Result<(), String> {
+    let mut config = state.config.lock().unwrap();
+    config.top_tags_use_results = use_results;
+    save(&app, &config)
+}
+
+#[tauri::command]
 fn clear_recent(
     app: AppHandle,
     state: State<Arc<AppState>>,
@@ -433,6 +444,7 @@ pub fn run() {
             toggle_favorite,
             push_recent,
             set_recent_enabled,
+            set_top_tags_scope,
             clear_recent,
             capture_active_window,
             focus_last_window
