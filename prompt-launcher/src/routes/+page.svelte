@@ -27,6 +27,7 @@
     recent_enabled: boolean;
     recent_meta: Record<string, number>;
     top_tags_use_results: boolean;
+    top_tags_limit: number;
   };
 
   type RecentState = {
@@ -48,7 +49,8 @@
     recent_ids: [],
     recent_enabled: true,
     recent_meta: {},
-    top_tags_use_results: false
+    top_tags_use_results: false,
+    top_tags_limit: 8
   });
   let selectedIndex = $state<number>(0);
   let status = $state<string>("");
@@ -94,7 +96,8 @@
     regularList = regular;
     activePrompt = filtered[selectedIndex] ?? null;
     const tagSource = getTagSource();
-    topTags = buildTopTags(tagSource, 8);
+    const tagLimit = config.top_tags_limit > 0 ? config.top_tags_limit : 8;
+    topTags = buildTopTags(tagSource, tagLimit);
   });
 
   onMount(async () => {
@@ -388,6 +391,12 @@
     config = { ...config, top_tags_use_results: value };
     await invoke("set_top_tags_scope", { useResults: value });
     return value;
+  }
+
+  async function setTopTagsLimit(limit: number) {
+    const value = Math.max(1, Math.min(20, Math.floor(limit)));
+    config = { ...config, top_tags_limit: value };
+    await invoke("set_top_tags_limit", { limit: value });
   }
 
   async function applyTopTagsScopeForFilter() {
@@ -1202,6 +1211,22 @@
           <span class="settings-label">Top tags</span>
           <span>Scope: {config.top_tags_use_results ? "Results" : "All"} (Ctrl+Shift+S)</span>
         </div>
+        <div class="settings-row">
+          <span class="settings-label">Top tags count</span>
+          <select
+            class="settings-select"
+            value={config.top_tags_limit}
+            onchange={(event) => {
+              const target = event.target as HTMLSelectElement | null;
+              const value = target ? Number(target.value) : 8;
+              void setTopTagsLimit(value);
+            }}
+          >
+            <option value="5">5</option>
+            <option value="8">8</option>
+            <option value="12">12</option>
+          </select>
+        </div>
         {#if hotkeyError}
           <div class="settings-row error">{hotkeyError}</div>
         {:else if settingsError}
@@ -1656,6 +1681,15 @@
   padding: 6px 8px;
   font-size: 12px;
   background: rgba(255, 255, 255, 0.85);
+}
+
+.settings-select {
+  border-radius: 8px;
+  border: 1px solid rgba(87, 107, 95, 0.4);
+  padding: 4px 8px;
+  font-size: 12px;
+  background: rgba(255, 255, 255, 0.85);
+  color: #3f5146;
 }
 
 .status {

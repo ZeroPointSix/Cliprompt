@@ -21,6 +21,8 @@ pub struct AppConfig {
     pub recent_meta: HashMap<String, i64>,
     #[serde(default)]
     pub top_tags_use_results: bool,
+    #[serde(default = "default_top_tags_limit")]
+    pub top_tags_limit: u32,
 }
 
 impl Default for AppConfig {
@@ -35,8 +37,13 @@ impl Default for AppConfig {
             recent_enabled: true,
             recent_meta: HashMap::new(),
             top_tags_use_results: false,
+            top_tags_limit: default_top_tags_limit(),
         }
     }
+}
+
+fn default_top_tags_limit() -> u32 {
+    8
 }
 
 pub fn load_or_init(app: &AppHandle) -> Result<AppConfig, String> {

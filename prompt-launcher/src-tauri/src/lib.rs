@@ -202,6 +202,18 @@ fn set_top_tags_scope(
 }
 
 #[tauri::command]
+fn set_top_tags_limit(
+    app: AppHandle,
+    state: State<Arc<AppState>>,
+    limit: u32,
+) -> Result<(), String> {
+    let mut config = state.config.lock().unwrap();
+    let value = limit.clamp(1, 20);
+    config.top_tags_limit = value;
+    save(&app, &config)
+}
+
+#[tauri::command]
 fn clear_recent(
     app: AppHandle,
     state: State<Arc<AppState>>,
@@ -445,6 +457,7 @@ pub fn run() {
             push_recent,
             set_recent_enabled,
             set_top_tags_scope,
+            set_top_tags_limit,
             clear_recent,
             capture_active_window,
             focus_last_window

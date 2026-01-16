@@ -185,3 +185,8 @@
 
 - [x] Show an auto indicator when top-tags scope is overridden by filters.
 - [x] Run `npm run check` after code updates.
+
+## Iteration 37 (Top tags count)
+
+- [x] Allow configuring how many top tags are shown.
+- [x] Run `npm run check` after code updates.
