@@ -40,3 +40,4 @@
 - Persisted the top-tags scope toggle in config.
 - Added a shortcut to toggle the top-tags scope.
 - Added a reset button to clear the search query and tag filters.
+- Auto-switched top-tags scope when Favorites/Recent filters are active.

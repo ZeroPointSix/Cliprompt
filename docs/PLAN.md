@@ -175,3 +175,8 @@
 
 - [x] Add a reset button to clear the search query and tag filters.
 - [x] Run `npm run check` after code updates.
+
+## Iteration 35 (Auto tag scope)
+
+- [x] Auto-switch top-tags scope when Favorites/Recent filters are active.
+- [x] Run `npm run check` after code updates.

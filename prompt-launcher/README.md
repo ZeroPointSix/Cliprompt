@@ -36,6 +36,7 @@ Minimal Windows prompt manager that stays local, is file driven, and pastes into
 - Top tags scope toggle (all prompts vs results, saved)
 - Top tags scope shortcut: Ctrl+Shift+S
 - Reset search button (clears query + tags)
+- Top tags scope auto-switches when Favorites/Recent filters are active
 - Clear recent shortcut: Ctrl+Shift+R
 - Toggle recent filter shortcut: Ctrl+Shift+E
 - Last-used timestamp in the preview panel

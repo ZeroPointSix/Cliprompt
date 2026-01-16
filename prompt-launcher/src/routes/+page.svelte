@@ -63,6 +63,7 @@
   let filtered = $state<PromptEntry[]>([]);
   let allPrompts = $state<PromptEntry[]>([]);
   let topTags = $state<{ tag: string; count: number }[]>([]);
+  let topTagsScopeBeforeFilter = $state<boolean | null>(null);
   let activePrompt = $state<PromptEntry | null>(null);
   let recentList = $state<{ prompt: PromptEntry; index: number }[]>([]);
   let favoritesList = $state<{ prompt: PromptEntry; index: number }[]>([]);
@@ -249,6 +250,9 @@
     showFavorites = !showFavorites;
     if (showFavorites) {
       showRecent = false;
+      void applyTopTagsScopeForFilter();
+    } else if (!showRecent) {
+      void restoreTopTagsScopeAfterFilter();
     }
     selectedIndex = 0;
     void refreshResults();
@@ -258,6 +262,9 @@
     showRecent = !showRecent;
     if (showRecent) {
       showFavorites = false;
+      void applyTopTagsScopeForFilter();
+    } else if (!showFavorites) {
+      void restoreTopTagsScopeAfterFilter();
     }
     selectedIndex = 0;
     void refreshResults();
@@ -381,6 +388,26 @@
     config = { ...config, top_tags_use_results: value };
     await invoke("set_top_tags_scope", { useResults: value });
     return value;
+  }
+
+  async function applyTopTagsScopeForFilter() {
+    if (topTagsScopeBeforeFilter === null) {
+      topTagsScopeBeforeFilter = config.top_tags_use_results;
+    }
+    if (!config.top_tags_use_results) {
+      await toggleTopTagsScope(true);
+    }
+  }
+
+  async function restoreTopTagsScopeAfterFilter() {
+    if (topTagsScopeBeforeFilter === null) {
+      return;
+    }
+    const previous = topTagsScopeBeforeFilter;
+    topTagsScopeBeforeFilter = null;
+    if (config.top_tags_use_results !== previous) {
+      await toggleTopTagsScope(previous);
+    }
   }
 
   function buildTopTags(prompts: PromptEntry[], limit: number) {
