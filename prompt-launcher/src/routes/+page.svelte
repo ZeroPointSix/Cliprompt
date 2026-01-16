@@ -426,11 +426,23 @@
       .some((part) => part.startsWith("#") && part.length > 1);
   }
 
+  function hasQuery() {
+    return query.trim().length > 0;
+  }
+
   function isTagActive(tag: string) {
     const token = normalizeTagToken(tag);
     return query
       .split(/\s+/)
       .some((part) => part.toLowerCase() === token);
+  }
+
+  function resetSearchFilters() {
+    query = "";
+    selectedIndex = 0;
+    status = "Search cleared";
+    void refreshResults();
+    focusSearch();
   }
 
   function clearTagFilters() {
@@ -788,6 +800,18 @@
             }}
           >
             Clear tags
+          </button>
+        {/if}
+        {#if hasQuery()}
+          <button
+            class="tag-clear"
+            type="button"
+            onclick={(event) => {
+              event.stopPropagation();
+              resetSearchFilters();
+            }}
+          >
+            Reset search
           </button>
         {/if}
         {#each topTags as item (item.tag)}

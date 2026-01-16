@@ -170,3 +170,8 @@
 
 - [x] Add a shortcut to toggle the top-tags scope.
 - [x] Run `npm run check` after code updates.
+
+## Iteration 34 (Reset search)
+
+- [x] Add a reset button to clear the search query and tag filters.
+- [x] Run `npm run check` after code updates.
