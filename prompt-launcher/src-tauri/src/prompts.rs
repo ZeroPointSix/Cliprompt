@@ -199,8 +199,10 @@ fn score_prompt(prompt: &PromptEntry, terms: &[String]) -> Option<i32> {
     .to_lowercase();
 
     let mut best = score_terms(&full_text, terms)?;
+    // Prioritize title matches with much higher weight (-10000)
+    // This ensures title matches always appear before content matches
     if let Some(score) = score_terms(&title_text, terms) {
-        best = best.min(score - 120);
+        best = best.min(score - 10000);
     }
     if let Some(score) = score_terms(&tag_text, terms) {
         best = best.min(score - 80);

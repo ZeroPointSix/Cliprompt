@@ -2,7 +2,7 @@
   import { onDestroy, onMount, tick } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
   import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-  import { getCurrentWindow } from "@tauri-apps/api/window";
+  import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
   import { open as openDialog } from "@tauri-apps/plugin-dialog";
   import { register, unregister } from "@tauri-apps/plugin-global-shortcut";
   import { writeText } from "@tauri-apps/plugin-clipboard-manager";
@@ -78,6 +78,19 @@
 
   let unlistenPrompts: UnlistenFn | null = null;
   let unlistenFocus: UnlistenFn | null = null;
+  let windowJustShown = false;
+  let focusLossTimer: ReturnType<typeof setTimeout> | null = null;
+  let lastToggleTime = 0;
+  let toggleDebounceMs = 300;
+
+  // Derived state to determine if the dropdown area should be visible
+  let hasContent = $derived(
+    query.length > 0 ||
+    showFavorites ||
+    showRecent ||
+    showSettings ||
+    filtered.length > 0
+  );
 
   $effect(() => {
     const recent = buildRecentList(filtered, config.recent_ids);
@@ -103,6 +116,43 @@
     topTags = buildTopTags(tagSource, tagLimit);
   });
 
+  // Dynamic window height adjustment based on content
+  $effect(() => {
+    const inputHeight = 56;
+    const itemHeight = 50;
+    const footerHeight = 40;
+    const settingsHeight = 360;
+    const minHeight = inputHeight;
+    const maxHeight = 500;
+
+    let targetHeight = minHeight;
+
+    if (hasContent) {
+      if (showSettings) {
+        // Settings view: input + settings container
+        targetHeight = inputHeight + settingsHeight;
+      } else if (filtered.length > 0) {
+        // Results view: input + (items * height) + footer
+        targetHeight = inputHeight + (filtered.length * itemHeight) + footerHeight;
+      } else {
+        // Empty state: input + empty message + footer
+        targetHeight = inputHeight + 100 + footerHeight;
+      }
+    }
+
+    // Clamp to min/max bounds
+    targetHeight = Math.max(minHeight, Math.min(maxHeight, targetHeight));
+
+    console.log(`[Window Resize] hasContent=${hasContent}, filtered.length=${filtered.length}, showSettings=${showSettings}, targetHeight=${targetHeight}`);
+
+    // Apply the new window size
+    appWindow.setSize(new LogicalSize(760, targetHeight)).then(() => {
+      console.log(`[Window Resize] Successfully resized to ${targetHeight}px`);
+    }).catch((error) => {
+      console.error(`[Window Resize] Failed to resize:`, error);
+    });
+  });
+
   onMount(async () => {
     document.title = "提示词启动器";
     config = await invoke<AppConfig>("get_config");
@@ -122,10 +172,30 @@
       void refreshResults();
     });
 
+    // Re-add focus listener with improved logic
     unlistenFocus = await appWindow.onFocusChanged(({ payload }) => {
       if (!payload) {
-        appWindow.hide();
+        // Window lost focus
+        // Don't hide immediately if window was just shown (within 500ms)
+        if (windowJustShown) {
+          console.log("[Focus] Window just shown, ignoring focus loss");
+          return;
+        }
+
+        // Add a delay before hiding to work with debounce mechanism
+        if (focusLossTimer) {
+          clearTimeout(focusLossTimer);
+        }
+        focusLossTimer = setTimeout(() => {
+          console.log("[Focus] Hiding window due to focus loss");
+          appWindow.hide();
+        }, 200);
       } else {
+        // Window gained focus - cancel any pending hide
+        if (focusLossTimer) {
+          clearTimeout(focusLossTimer);
+          focusLossTimer = null;
+        }
         focusSearch();
       }
     });
@@ -144,34 +214,58 @@
   });
 
   async function registerHotkey(hotkey: string) {
+    console.log("[registerHotkey] Attempting to register hotkey:", hotkey);
     hotkeyError = "";
     if (currentHotkey) {
+      console.log("[registerHotkey] Unregistering previous hotkey:", currentHotkey);
       await unregister(currentHotkey).catch(() => {});
     }
     try {
       await register(hotkey, toggleWindow);
       currentHotkey = hotkey;
+      console.log("[registerHotkey] Successfully registered hotkey:", hotkey);
     } catch (error) {
+      console.error("[registerHotkey] Failed to register hotkey:", error);
       hotkeyError = `快捷键注册失败：${error}`;
     }
   }
 
   async function toggleWindow() {
+    // Debounce to prevent multiple rapid toggles
+    const now = Date.now();
+    if (now - lastToggleTime < toggleDebounceMs) {
+      console.log("[toggleWindow] Debounced - ignoring rapid toggle");
+      return;
+    }
+    lastToggleTime = now;
+
     const visible = await appWindow.isVisible();
+    console.log("[toggleWindow] Current visible state:", visible);
+
     if (visible) {
+      console.log("[toggleWindow] Hiding window");
       await appWindow.hide();
       return;
     }
+
+    console.log("[toggleWindow] Showing window");
     await invoke("capture_active_window").catch(() => {});
+    windowJustShown = true;
     await appWindow.show();
     await appWindow.setFocus();
     await tick();
     focusSearch();
+    // Clear the flag after a short delay to allow normal focus loss handling
+    setTimeout(() => {
+      windowJustShown = false;
+    }, 500);
   }
 
   function focusSearch() {
     if (searchInput) {
       searchInput.focus();
+      // Ensure cursor is at the end or text is selected, depending on preference.
+      // Selecting all is standard for launchers.
       searchInput.select();
     }
   }
@@ -204,6 +298,38 @@
       status = "快捷键已保存";
       settingsError = "";
     }
+  }
+
+  function onHotkeyInputKeydown(event: KeyboardEvent) {
+    // Prevent default behavior to avoid typing characters
+    event.preventDefault();
+
+    // Ignore modifier keys pressed alone
+    if (["Control", "Alt", "Shift", "Meta"].includes(event.key)) {
+      return;
+    }
+
+    // Build the hotkey string
+    const modifiers: string[] = [];
+    if (event.ctrlKey) modifiers.push("Ctrl");
+    if (event.altKey) modifiers.push("Alt");
+    if (event.shiftKey) modifiers.push("Shift");
+    if (event.metaKey) modifiers.push("Meta");
+
+    // Get the key name
+    let key = event.key;
+
+    // Normalize key names for special keys
+    if (key === " ") key = "Space";
+    else if (key.length === 1) key = key.toUpperCase();
+
+    // Build the hotkey string (e.g., "Alt+Space", "Ctrl+Shift+A")
+    const hotkey = modifiers.length > 0
+      ? `${modifiers.join("+")}+${key}`
+      : key;
+
+    hotkeyDraft = hotkey;
+    hotkeyError = "";
   }
 
   async function toggleAutoPaste() {
@@ -322,15 +448,25 @@
 
   async function usePrompt(prompt: PromptEntry | null | undefined) {
     if (!prompt) {
+      console.log("[usePrompt] No prompt provided");
       return;
     }
-    await appWindow.hide();
-    await writeText(prompt.body);
-    await invoke("focus_last_window", { autoPaste: config.auto_paste });
-    await markRecent(prompt);
-    query = "";
-    selectedIndex = 0;
-    void refreshResults();
+    console.log("[usePrompt] Using prompt:", prompt.title);
+    try {
+      await appWindow.hide();
+      console.log("[usePrompt] Window hidden");
+      await writeText(prompt.body);
+      console.log("[usePrompt] Text written to clipboard");
+      await invoke("focus_last_window", { autoPaste: config.auto_paste });
+      console.log("[usePrompt] Focused last window");
+      await markRecent(prompt);
+      console.log("[usePrompt] Marked as recent");
+      query = "";
+      selectedIndex = 0;
+      void refreshResults();
+    } catch (error) {
+      console.error("[usePrompt] Error:", error);
+    }
   }
 
   async function copyPrompt(prompt: PromptEntry | null | undefined) {
@@ -404,8 +540,8 @@
 
   async function toggleSettings() {
     showSettings = !showSettings;
+    await tick();
     if (!showSettings) {
-      await tick();
       focusSearch();
     }
   }
@@ -485,7 +621,7 @@
 
   function hasTagFilters() {
     return query
-      .split(/\s+/)
+      .split(/\\s+/)
       .some((part) => part.startsWith("#") && part.length > 1);
   }
 
@@ -500,7 +636,7 @@
   function isTagActive(tag: string) {
     const token = normalizeTagToken(tag);
     return query
-      .split(/\s+/)
+      .split(/\\s+/)
       .some((part) => part.toLowerCase() === token);
   }
 
@@ -518,7 +654,7 @@
   }
 
   function clearTagFilters() {
-    const parts = query.split(/\s+/).filter(Boolean);
+    const parts = query.split(/\\s+/).filter(Boolean);
     const remaining = parts.filter((part) => !part.startsWith("#"));
     query = remaining.join(" ").trim();
     selectedIndex = 0;
@@ -529,7 +665,7 @@
 
   function toggleTagFilter(tag: string) {
     const token = normalizeTagToken(tag);
-    const parts = query.split(/\s+/).filter(Boolean);
+    const parts = query.split(/\\s+/).filter(Boolean);
     const hasTag = parts.some((part) => part.toLowerCase() === token);
     const filtered = parts.filter((part) => part.toLowerCase() !== token);
     const next = hasTag ? filtered : [...filtered, token];
@@ -588,7 +724,7 @@
   }
 
   function escapeRegex(text: string) {
-    return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return text.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&");
   }
 
   function highlightSnippet(snippet: string, terms: string[]) {
@@ -619,7 +755,7 @@
 
   function extractTerms(rawQuery: string) {
     return rawQuery
-      .split(/\s+/)
+      .split(/\\s+/)
       .filter((term) => term && !term.startsWith("#"))
       .map((term) => term.toLowerCase());
   }
@@ -628,7 +764,7 @@
     if (!body) {
       return "";
     }
-    const compact = body.replace(/\s+/g, " ").trim();
+    const compact = body.replace(/\\s+/g, " ").trim();
     const lower = compact.toLowerCase();
     let bestIndex = -1;
     let bestTerm = "";
@@ -733,7 +869,7 @@
       status = nextValue ? "热门标签：结果" : "热门标签：全部";
       return;
     }
-    if (filtered.length === 0) {
+    if (filtered.length === 0 && !showSettings) {
       if (event.key === "Escape") {
         event.preventDefault();
         appWindow.hide();
@@ -752,12 +888,19 @@
     }
     if (event.key === "Enter") {
       event.preventDefault();
-      usePrompt(filtered[selectedIndex]);
+      if (!showSettings && filtered.length > 0) {
+          usePrompt(filtered[selectedIndex]);
+      }
       return;
     }
     if (event.key === "Escape") {
       event.preventDefault();
-      appWindow.hide();
+      if (showSettings) {
+          showSettings = false;
+          focusSearch();
+      } else {
+          appWindow.hide();
+      }
     }
   }
 
@@ -795,760 +938,473 @@
   }
 </script>
 
-<main class="shell">
-  <section class="panel">
-    {#if showSettings}
-      <header class="panel-header settings-header">
-        <div class="title">
-          <span class="name">设置</span>
-          <span class="meta">基础配置与行为选项</span>
+<main class="launcher-root">
+    <div class="input-bar" class:expanded={hasContent}>
+        <div class="search-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
         </div>
-        <div class="actions">
-          <button class="ghost" type="button" onclick={toggleSettings}>
-            返回
-          </button>
-        </div>
-      </header>
-    {:else}
-      <header class="panel-header">
-        <div class="title">
-          <span class="name">提示词启动器</span>
-          <span class="meta">快捷键：{config.hotkey}</span>
-        </div>
-        <div class="actions">
-          <button class="ghost" type="button" onclick={toggleSettings}>
-            设置
-          </button>
-        </div>
-      </header>
-    {/if}
+        <input
+            bind:this={searchInput}
+            class="main-input"
+            placeholder="Search prompts..."
+            value={query}
+            oninput={onSearchInput}
+            onkeydown={onSearchKeydown}
+        />
+        <button class="settings-btn" class:active={showSettings} onclick={toggleSettings} title="Settings">
+             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="3"></circle>
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+            </svg>
+        </button>
+    </div>
 
-    {#if showSettings}
-      <section class="settings-page">
-        <div class="settings-section">
-          <div class="settings-section-title">基础</div>
-          <div class="settings-row">
-            <div class="settings-label">提示词目录</div>
-            <div class="settings-control">
-              <div class="settings-value">
-                {config.prompts_dir || "未设置"}
-              </div>
-              <div class="settings-actions">
-                <button type="button" onclick={chooseFolder}>选择目录</button>
-                <button
-                  class="ghost"
-                  type="button"
-                  onclick={openFolder}
-                  disabled={!config.prompts_dir}
-                >
-                  打开目录
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+    {#if hasContent}
+        <div class="results-dropdown">
+            {#if showSettings}
+                <div class="settings-container">
+                    <div class="settings-header-mini">
+                        <span>设置</span>
+                        <span class="version">v0.1.0</span>
+                    </div>
 
-        <div class="settings-section">
-          <div class="settings-section-title">快捷键</div>
-          <div class="settings-row">
-            <div class="settings-label">唤起快捷键</div>
-            <div class="settings-control">
-              <div class="settings-inline">
-                <input class="hotkey-input" bind:value={hotkeyDraft} />
-                <button type="button" onclick={applyHotkey}>应用</button>
-              </div>
-              <div class="settings-hint">格式示例：Ctrl+Shift+P</div>
-              <div class="settings-hint">当前：{config.hotkey}</div>
-            </div>
-          </div>
-          {#if hotkeyError}
-            <div class="settings-message error">{hotkeyError}</div>
-          {/if}
-        </div>
+                    <div class="settings-scroll-area">
+                        <div class="settings-section">
+                            <div class="section-title">基础配置</div>
+                            <div class="setting-item">
+                                <span class="label">提示词目录</span>
+                                <div class="controls">
+                                    <div class="path-display" title={config.prompts_dir}>{config.prompts_dir || "未设置"}</div>
+                                    <button class="btn-sm" onclick={chooseFolder}>选择</button>
+                                </div>
+                            </div>
+                            <div class="setting-item">
+                                <span class="label">快捷键</span>
+                                <div class="controls">
+                                    <input class="input-sm" bind:value={hotkeyDraft} onkeydown={onHotkeyInputKeydown} placeholder="按下组合键..." />
+                                    <button class="btn-sm" onclick={applyHotkey}>应用</button>
+                                </div>
+                            </div>
+                        </div>
 
-        <div class="settings-section">
-          <div class="settings-section-title">行为</div>
-          <div class="settings-row">
-            <div class="settings-label">自动粘贴</div>
-            <div class="settings-control">
-              <label class="toggle">
-                <input
-                  type="checkbox"
-                  checked={config.auto_paste}
-                  onchange={toggleAutoPaste}
-                />
-                <span>粘贴后返回原窗口</span>
-              </label>
-            </div>
-          </div>
-          <div class="settings-row">
-            <div class="settings-label">开机自启</div>
-            <div class="settings-control">
-              <label class="toggle">
-                <input
-                  type="checkbox"
-                  checked={config.auto_start}
-                  onchange={toggleAutoStart}
-                />
-                <span>{config.auto_start ? "已启用" : "已关闭"}</span>
-              </label>
-            </div>
-          </div>
-          {#if settingsError}
-            <div class="settings-message error">{settingsError}</div>
-          {/if}
-        </div>
-
-        <div class="settings-section">
-          <div class="settings-section-title">最近与收藏</div>
-          <div class="settings-row">
-            <div class="settings-label">最近记录</div>
-            <div class="settings-control">
-              <label class="toggle">
-                <input
-                  type="checkbox"
-                  checked={config.recent_enabled}
-                  onchange={toggleRecentEnabled}
-                />
-                <span>{config.recent_enabled ? "已开启" : "已关闭"}</span>
-              </label>
-              <div class="settings-actions">
-                <button class="ghost tiny" type="button" onclick={clearRecent}>
-                  清空最近
-                </button>
-              </div>
-            </div>
-          </div>
-          <div class="settings-row">
-            <div class="settings-label">收藏操作</div>
-            <div class="settings-control">
-              <div class="settings-hint">
-                Ctrl+Shift+F 收藏，Ctrl+Shift+G 过滤
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="settings-section">
-          <div class="settings-section-title">热门标签</div>
-          <div class="settings-row">
-            <div class="settings-label">统计范围</div>
-            <div class="settings-control">
-              <div class="segment">
-                <button
-                  class="ghost segment-item"
-                  class:active={!config.top_tags_use_results}
-                  type="button"
-                  onclick={() => toggleTopTagsScope(false)}
-                >
-                  全部
-                </button>
-                <button
-                  class="ghost segment-item"
-                  class:active={config.top_tags_use_results}
-                  type="button"
-                  onclick={() => toggleTopTagsScope(true)}
-                >
-                  结果
-                </button>
-              </div>
-              {#if topTagsScopeBeforeFilter !== null}
-                <div class="settings-hint">当前范围由筛选自动切换</div>
-              {/if}
-            </div>
-          </div>
-          <div class="settings-row">
-            <div class="settings-label">显示数量</div>
-            <div class="settings-control">
-              <select
-                class="settings-select"
-                value={config.top_tags_limit}
-                onchange={(event) => {
-                  const target = event.target as HTMLSelectElement | null;
-                  const value = target ? Number(target.value) : 8;
-                  void setTopTagsLimit(value);
-                }}
-              >
-                <option value="5">5</option>
-                <option value="8">8</option>
-                <option value="12">12</option>
-                <option value="16">16</option>
-              </select>
-            </div>
-          </div>
-        </div>
-
-        <div class="settings-section">
-          <div class="settings-section-title">快捷键一览</div>
-          <div class="settings-row">
-            <div class="settings-label">展开说明</div>
-            <div class="settings-control">
-              <button
-                class="ghost"
-                type="button"
-                onclick={() => (showShortcuts = !showShortcuts)}
-              >
-                {showShortcuts ? "收起" : "展开"}
-              </button>
-              {#if showShortcuts}
-                <div class="shortcut-list">
-                  <span>Enter：粘贴</span>
-                  <span>Esc：隐藏</span>
-                  <span>右键：打开文件</span>
-                  <span>Ctrl+Shift+F：收藏</span>
-                  <span>Ctrl+Shift+G：收藏过滤</span>
-                  <span>Ctrl+Shift+R：清空最近</span>
-                  <span>Ctrl+Shift+E：最近过滤</span>
-                  <span>Ctrl+Shift+S：标签范围</span>
+                        <div class="settings-section">
+                             <div class="section-title">行为选项</div>
+                             <div class="setting-item">
+                                <span class="label">自动粘贴</span>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" checked={config.auto_paste} onchange={toggleAutoPaste} />
+                                    <span class="slider"></span>
+                                </label>
+                             </div>
+                             <div class="setting-item">
+                                <span class="label">开机自启</span>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" checked={config.auto_start} onchange={toggleAutoStart} />
+                                    <span class="slider"></span>
+                                </label>
+                             </div>
+                        </div>
+                    </div>
                 </div>
-              {/if}
-            </div>
-          </div>
+            {:else}
+                <div class="results-list">
+                    {#if filtered.length === 0}
+                         <div class="empty-state">
+                             <span class="empty-icon">🔍</span>
+                             <span>没有找到匹配的提示词</span>
+                         </div>
+                    {:else}
+                        {#each filtered as prompt, index (prompt.id)}
+                            <div
+                                class="result-item"
+                                class:selected={index === selectedIndex}
+                                role="button"
+                                tabindex="0"
+                                onclick={() => { selectedIndex = index; usePrompt(prompt); }}
+                                onmouseenter={() => selectedIndex = index}
+                            >
+                                <div class="result-main">
+                                    <div class="result-title">
+                                        <span class="title-text">{prompt.title}</span>
+                                        {#if prompt.tags?.length}
+                                            <span class="tags-inline">
+                                                {#each prompt.tags as tag}
+                                                    <span class="tag-pill">#{tag}</span>
+                                                {/each}
+                                            </span>
+                                        {/if}
+                                    </div>
+                                    <div class="result-preview">{@html getRowPreviewHtml(prompt)}</div>
+                                </div>
+                            </div>
+                        {/each}
+                    {/if}
+                </div>
+
+                <div class="dropdown-footer">
+                    {#if status}
+                        <span class="status-msg">{status}</span>
+                    {:else}
+                        <span class="keys-hint">
+                            <span class="key">↵</span> 粘贴
+                            <span class="key">Esc</span> 返回
+                            <span class="key">Tab</span> 选择
+                        </span>
+                    {/if}
+                </div>
+            {/if}
         </div>
-      </section>
-    {:else}
-    <div class="search search-compact">
-      <span class="search-icon">/</span>
-      <input
-        bind:this={searchInput}
-        class="search-input"
-        placeholder="搜索提示词，支持 #标签"
-        value={query}
-        oninput={onSearchInput}
-        onkeydown={onSearchKeydown}
-      />
-      <span class="count">{filtered.length}</span>
-    </div>
-
-    <div class="list list-compact">
-      {#if filtered.length === 0}
-        <div class="empty">
-          <span>暂无匹配</span>
-          <span class="hint">试试 #sql 这样的标签</span>
-        </div>
-      {:else}
-        {#each filtered as prompt, index (prompt.id)}
-          <div
-            class:selected={index === selectedIndex}
-            class="row row-compact"
-            style={`--i: ${index}`}
-            role="button"
-            tabindex="0"
-            onclick={() => (selectedIndex = index)}
-            ondblclick={() => usePrompt(prompt)}
-            onkeydown={(event) => {
-              if (event.key === "Enter" || event.key === " ") {
-                event.preventDefault();
-                usePrompt(prompt);
-              }
-            }}
-            oncontextmenu={(event) => {
-              event.preventDefault();
-              openPrompt(prompt);
-            }}
-          >
-            <div class="row-title">
-              <div class="row-heading">
-                <span class="row-name">{prompt.title}</span>
-                {#if prompt.tags?.length}
-                  <div class="tags">
-                    {#each prompt.tags as tag}
-                      <button
-                        class="tag"
-                        class:active={isTagActive(tag)}
-                        type="button"
-                        onclick={(event) => {
-                          event.stopPropagation();
-                          toggleTagFilter(tag);
-                        }}
-                      >
-                        #{tag}
-                      </button>
-                    {/each}
-                  </div>
-                {/if}
-              </div>
-            </div>
-            <div class="row-preview">{@html getRowPreviewHtml(prompt)}</div>
-          </div>
-        {/each}
-      {/if}
-    </div>
-
-    <footer class="panel-footer panel-footer-compact">
-      <div class="status">
-        {#if status}
-          <span>{status}</span>
-        {:else}
-          <span>Enter：粘贴，Esc：隐藏，右键：打开文件</span>
-        {/if}
-      </div>
-    </footer>
-
     {/if}
-  </section>
 </main>
 
 <style>
+:global(html),
 :global(body) {
   margin: 0;
-  background: transparent;
-  color: #1e2320;
-  font-family: "Bahnschrift", "Segoe UI", sans-serif;
-  letter-spacing: 0.01em;
-}
-
-:global(*),
-:global(*::before),
-:global(*::after) {
-  box-sizing: border-box;
-}
-
-.shell {
-  min-height: 100vh;
-  display: grid;
-  place-items: center;
-  padding: 24px;
-  background: radial-gradient(circle at 10% 10%, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0)) ,
-    radial-gradient(circle at 90% 0%, rgba(186, 227, 218, 0.35), rgba(186, 227, 218, 0)),
-    linear-gradient(135deg, rgba(246, 238, 228, 0.95), rgba(230, 242, 236, 0.96));
-}
-
-.panel {
-  width: min(640px, 92vw);
-  background: rgba(255, 255, 255, 0.76);
-  border-radius: 22px;
-  padding: 20px;
-  box-shadow:
-    0 30px 80px rgba(36, 57, 46, 0.18),
-    inset 0 1px 0 rgba(255, 255, 255, 0.6);
-  backdrop-filter: blur(18px);
-  animation: rise 0.35s ease;
-  position: relative;
+  padding: 0;
+  background: transparent !important;
+  color: #c9d1d9; /* Light text for dark mode default, or use system adaptive */
+  font-family: "Segoe UI", "Roboto", sans-serif;
   overflow: hidden;
+  height: 100vh;
+  width: 100vw;
 }
 
-.panel::before {
-  content: "";
-  position: absolute;
-  inset: -120px auto auto -120px;
-  width: 260px;
-  height: 260px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(175, 224, 201, 0.45), rgba(175, 224, 201, 0));
+/* Light theme variables (defaulting to a clean light look for now as per request for "classic") */
+:root {
+  --bg-color: #ffffff;
+  --text-color: #333333;
+  --accent-color: #0078d4;
+  --selected-bg: #f3f3f3;
+  --border-color: #e5e5e5;
+  --shadow: none;
+  --input-height: 56px;
+  --radius: 0;
 }
 
-.panel::after {
-  content: "";
-  position: absolute;
-  inset: auto -80px -120px auto;
-  width: 240px;
-  height: 240px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(224, 197, 150, 0.4), rgba(224, 197, 150, 0));
-}
-
-.panel-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  position: relative;
-  z-index: 1;
-}
-
-.title {
+.launcher-root {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  padding: 0;
+  margin: 0;
+  width: 100%;
+  height: 100vh;
+  box-sizing: border-box;
+  align-items: stretch;
+  justify-content: flex-start;
+  background: transparent !important;
 }
 
-.name {
-  font-size: 20px;
-  font-weight: 700;
-}
-
-.meta {
-  font-size: 12px;
-  color: #607063;
-}
-
-
-.actions {
+.input-bar {
+  width: 100%;
+  height: var(--input-height);
+  background: var(--bg-color);
+  border-radius: 0;
+  box-shadow: none;
   display: flex;
   align-items: center;
-  gap: 12px;
-  font-size: 12px;
-}
-
-.ghost {
-  background: transparent;
-  border: 1px solid rgba(87, 107, 95, 0.4);
-  color: #375046;
-}
-
-.ghost.active {
-  background: rgba(221, 243, 232, 0.75);
-  border-color: rgba(61, 108, 90, 0.6);
-  color: #2d6a57;
-}
-
-.toggle {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.toggle input {
-  accent-color: #2c6958;
-}
-
-.search {
-  margin-top: 14px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 14px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.7);
-  border: 1px solid rgba(134, 157, 140, 0.3);
+  padding: 0 16px;
+  transition: none;
+  z-index: 100;
   position: relative;
-  z-index: 1;
+  margin: 0;
+  opacity: 1;
 }
 
-.search-compact {
-  padding: 8px 12px;
+.input-bar.expanded {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .search-icon {
-  font-weight: 700;
-  color: #7e8f82;
+  color: #777;
+  display: flex;
+  align-items: center;
+  margin-right: 12px;
 }
 
-.search-input {
+.main-input {
   flex: 1;
   border: none;
   background: transparent;
-  font-size: 16px;
+  font-size: 20px;
   outline: none;
+  color: var(--text-color);
+  height: 100%;
 }
 
-.count {
-  font-size: 12px;
-  color: #5f6f63;
+.settings-btn {
+  background: transparent;
+  border: none;
+  color: #999;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  transition: all 0.2s;
 }
 
+.settings-btn:hover, .settings-btn.active {
+  background: #f0f0f0;
+  color: #333;
+}
 
-.list {
+.results-dropdown {
+  width: 100%;
+  background: var(--bg-color);
+  border-radius: 0;
+  box-shadow: none;
+  overflow: visible;
+  max-height: 400px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-top: 12px;
-  max-height: 320px;
-  overflow-y: auto;
-  padding-right: 6px;
+  animation: slideDown 0.15s ease-out;
+  margin: 0;
+  opacity: 1;
 }
 
-.list-compact {
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.results-list {
   max-height: 360px;
+  overflow-y: auto;
+  padding: 8px 0;
 }
 
-.row {
-  padding: 12px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.5);
-  border: 1px solid transparent;
+.result-item {
+  padding: 10px 16px;
   cursor: pointer;
-  transition: 0.2s ease;
-  animation: fadeUp 0.35s ease both;
-  animation-delay: calc(var(--i) * 40ms);
-}
-
-.row-compact {
-  padding: 10px 12px;
-}
-
-.row.selected {
-  border-color: rgba(61, 108, 90, 0.6);
-  background: rgba(221, 243, 232, 0.75);
-}
-
-.row-title {
+  border-left: 3px solid transparent;
   display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  font-weight: 600;
-  font-size: 14px;
+  align-items: center;
 }
 
-.row-name {
-  font-weight: 600;
+.result-item.selected {
+  background-color: var(--selected-bg);
+  border-left-color: var(--accent-color);
 }
 
-.row-heading {
+.result-main {
+  flex: 1;
+  overflow: hidden;
+}
+
+.result-title {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--text-color);
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
 }
 
-
-.row-preview {
-  margin-top: 6px;
-  font-size: 12px;
-  color: #6c7a70;
+.title-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-:global(.row-preview mark) {
-  background: rgba(255, 230, 150, 0.85);
-  color: #4a3f1f;
-  padding: 0 2px;
-  border-radius: 4px;
-}
-
-
-.tags {
+.tags-inline {
   display: flex;
   gap: 4px;
   flex-wrap: wrap;
 }
 
-.tag {
-  font-size: 10px;
-  background: rgba(52, 92, 78, 0.12);
-  color: #3e6b5b;
-  padding: 2px 6px;
-  border-radius: 999px;
-  border: none;
-  cursor: pointer;
-  font-family: inherit;
+.tag-pill {
+  font-size: 11px;
+  background: #eef;
+  color: #44a;
+  padding: 1px 6px;
+  border-radius: 12px;
 }
 
-.tag.active {
-  background: rgba(221, 243, 232, 0.9);
-  color: #2d6a57;
+.result-preview {
+  font-size: 13px;
+  color: #666;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 2px;
 }
 
-
-.panel-footer {
-  margin-top: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  position: relative;
-  z-index: 1;
+:global(.result-preview mark) {
+  background: rgba(255, 230, 0, 0.4);
+  color: inherit;
+  padding: 0;
 }
 
-.panel-footer-compact {
-  justify-content: flex-start;
-}
-
-.settings-page {
-  margin-top: 18px;
+.empty-state {
+  padding: 30px;
+  text-align: center;
+  color: #888;
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  position: relative;
-  z-index: 1;
+  align-items: center;
+  gap: 10px;
+}
+
+.empty-icon {
+  font-size: 24px;
+}
+
+.dropdown-footer {
+  padding: 8px 16px;
+  background: #fafafa;
+  border-top: 1px solid var(--border-color);
+  font-size: 12px;
+  color: #888;
+  display: flex;
+  justify-content: space-between;
+}
+
+.keys-hint {
+  display: flex;
+  gap: 12px;
+}
+
+.key {
+  background: #eee;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-family: monospace;
+  font-size: 11px;
+  margin-right: 2px;
+}
+
+/* Settings Styles */
+.settings-container {
+    padding: 16px;
+    height: 360px;
+    display: flex;
+    flex-direction: column;
+}
+
+.settings-header-mini {
+    font-size: 14px;
+    font-weight: bold;
+    color: #555;
+    margin-bottom: 12px;
+    display: flex;
+    justify-content: space-between;
+}
+
+.settings-scroll-area {
+    flex: 1;
+    overflow-y: auto;
 }
 
 .settings-section {
-  padding: 14px 16px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.65);
-  border: 1px solid rgba(134, 157, 140, 0.25);
+    margin-bottom: 20px;
 }
 
-.settings-section-title {
-  font-weight: 700;
-  font-size: 12px;
-  color: #3f5146;
-  margin-bottom: 10px;
+.section-title {
+    font-size: 12px;
+    color: var(--accent-color);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+    font-weight: 600;
 }
 
-.settings-row {
-  display: grid;
-  grid-template-columns: 140px 1fr;
-  gap: 14px;
-  font-size: 12px;
-  color: #5b6a60;
-  margin-bottom: 10px;
+.setting-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    font-size: 13px;
+    color: var(--text-color);
 }
 
-.settings-row:last-child {
-  margin-bottom: 0;
+.controls {
+    display: flex;
+    gap: 8px;
+    align-items: center;
 }
 
-.settings-label {
-  color: #3f5146;
-  font-weight: 600;
-  padding-top: 4px;
+.path-display {
+    max-width: 150px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: #666;
+    font-size: 12px;
+    background: #f5f5f5;
+    padding: 2px 6px;
+    border-radius: 4px;
 }
 
-.settings-control {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+.btn-sm {
+    padding: 3px 8px;
+    font-size: 12px;
+    border: 1px solid #ddd;
+    background: white;
+    border-radius: 4px;
+    cursor: pointer;
 }
 
-.settings-actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
+.btn-sm:hover {
+    background: #f0f0f0;
 }
 
-.settings-inline {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  flex-wrap: wrap;
+.input-sm {
+    padding: 3px 6px;
+    font-size: 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    width: 100px;
 }
 
-.settings-hint {
-  font-size: 11px;
-  color: #6a7a6f;
+/* Toggle Switch */
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 32px;
+  height: 18px;
 }
 
-.settings-message {
-  font-size: 12px;
-  font-weight: 600;
-  color: #a34f3b;
-  margin-left: 140px;
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
 }
 
-.settings-value {
-  font-size: 12px;
-  color: #4a5b51;
-  word-break: break-all;
-}
-
-.segment {
-  display: inline-flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.segment-item {
-  font-size: 11px;
-  padding: 4px 10px;
-  border-radius: 999px;
-}
-
-.shortcut-list {
-  margin-top: 8px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 14px;
-  font-size: 11px;
-  color: #5f6f63;
-}
-
-.tiny {
-  padding: 4px 10px;
-  font-size: 11px;
-}
-
-.hotkey-input {
-  width: 140px;
-  border-radius: 8px;
-  border: 1px solid rgba(87, 107, 95, 0.4);
-  padding: 6px 8px;
-  font-size: 12px;
-  background: rgba(255, 255, 255, 0.85);
-}
-
-.settings-select {
-  border-radius: 8px;
-  border: 1px solid rgba(87, 107, 95, 0.4);
-  padding: 4px 8px;
-  font-size: 12px;
-  background: rgba(255, 255, 255, 0.85);
-  color: #3f5146;
-}
-
-.status {
-  font-size: 12px;
-  color: #5b6a60;
-}
-
-.error {
-  color: #a34f3b;
-}
-
-.panel button:not(.row) {
-  border: none;
-  padding: 8px 14px;
-  border-radius: 10px;
-  background: #2d6a57;
-  color: #f5f3ed;
-  font-size: 12px;
+.slider {
+  position: absolute;
   cursor: pointer;
-  transition: 0.2s ease;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #ccc;
+  transition: .4s;
+  border-radius: 34px;
 }
 
-.panel button:not(.row):hover {
-  transform: translateY(-1px);
-  box-shadow: 0 8px 18px rgba(45, 106, 87, 0.2);
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 14px;
+  width: 14px;
+  left: 2px;
+  bottom: 2px;
+  background-color: white;
+  transition: .4s;
+  border-radius: 50%;
 }
 
-.panel button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  transform: none;
-  box-shadow: none;
+input:checked + .slider {
+  background-color: var(--accent-color);
 }
 
-.empty {
-  padding: 16px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.6);
-  border: 1px dashed rgba(134, 157, 140, 0.3);
-  text-align: center;
-  font-size: 13px;
-  color: #6c7a70;
-}
-
-.hint {
-  display: block;
-  margin-top: 6px;
-  font-size: 12px;
-}
-
-@keyframes rise {
-  from {
-    opacity: 0;
-    transform: translateY(8px) scale(0.98);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-@keyframes fadeUp {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@media (max-width: 720px) {
-  .settings-row {
-    grid-template-columns: 1fr;
-  }
-
-  .settings-message {
-    margin-left: 0;
-  }
-
-  .panel-footer {
-    flex-direction: column;
-    align-items: flex-start;
-  }
+input:checked + .slider:before {
+  transform: translateX(14px);
 }
 </style>
