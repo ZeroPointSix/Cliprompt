@@ -405,11 +405,27 @@
     return `#${tag.toLowerCase()}`;
   }
 
+  function hasTagFilters() {
+    return query
+      .split(/\s+/)
+      .some((part) => part.startsWith("#") && part.length > 1);
+  }
+
   function isTagActive(tag: string) {
     const token = normalizeTagToken(tag);
     return query
       .split(/\s+/)
       .some((part) => part.toLowerCase() === token);
+  }
+
+  function clearTagFilters() {
+    const parts = query.split(/\s+/).filter(Boolean);
+    const remaining = parts.filter((part) => !part.startsWith("#"));
+    query = remaining.join(" ").trim();
+    selectedIndex = 0;
+    status = "Tag filters cleared";
+    void refreshResults();
+    focusSearch();
   }
 
   function toggleTagFilter(tag: string) {
@@ -725,6 +741,18 @@
     {#if topTags.length > 0}
       <div class="tag-bar">
         <span class="tag-bar-label">Top tags</span>
+        {#if hasTagFilters()}
+          <button
+            class="tag-clear"
+            type="button"
+            onclick={(event) => {
+              event.stopPropagation();
+              clearTagFilters();
+            }}
+          >
+            Clear tags
+          </button>
+        {/if}
         {#each topTags as item (item.tag)}
           <button
             class="tag"
@@ -1268,6 +1296,17 @@
   margin-left: 4px;
   font-size: 9px;
   opacity: 0.6;
+}
+
+.tag-clear {
+  font-size: 11px;
+  border-radius: 999px;
+  padding: 3px 8px;
+  border: 1px solid rgba(134, 157, 140, 0.4);
+  background: transparent;
+  color: #5b6a60;
+  cursor: pointer;
+  font-family: inherit;
 }
 
 .content {

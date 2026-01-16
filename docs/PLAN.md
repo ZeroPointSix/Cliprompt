@@ -150,3 +150,8 @@
 
 - [x] Add a top-tags bar for quick #tag filtering.
 - [x] Run `npm run check` after code updates.
+
+## Iteration 30 (Clear tag filters)
+
+- [x] Add a clear button to remove all #tag filters.
+- [x] Run `npm run check` after code updates.
