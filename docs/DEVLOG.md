@@ -49,3 +49,4 @@
 - Auto-expanded the shortcuts legend on first launch.
 - Fixed Tauri build issues on Windows (tray feature, watcher typing, Win32 imports).
 - Translated UI strings and seed prompts to Chinese.
+- Added the initial code review report to docs.

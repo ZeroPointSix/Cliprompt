@@ -220,3 +220,8 @@
 
 - [x] Translate UI strings and seed prompts to Chinese.
 - [x] Run `npm run check` after code updates.
+
+## Iteration 44 (Code review record)
+
+- [x] Track the initial code review report in docs.
+- [x] Run `npm run check` after code updates.
