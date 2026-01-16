@@ -54,3 +54,4 @@
 - Simplified the launcher UI to a lightweight search-first layout.
 - Prevented tray right-click from toggling the window.
 - Set tray menu labels to Chinese and updated the window title on launch.
+- Auto-shown the main window on startup in debug builds for verification.

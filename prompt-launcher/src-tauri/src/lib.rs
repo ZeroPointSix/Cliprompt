@@ -463,6 +463,9 @@ pub fn run() {
                 .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
             start_watcher(handle.clone(), state, dir)
                 .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+            if cfg!(debug_assertions) {
+                let _ = show_main_window(&handle);
+            }
 
             Ok(())
         })

@@ -243,3 +243,8 @@
 - [x] Use Chinese labels for tray menu items.
 - [x] Set the window title to Chinese on launch.
 - [x] Run `npm run check` after code updates.
+
+## Iteration 48 (Dev startup visibility)
+
+- [x] Auto-show the main window on startup in debug builds for verification.
+- [x] Run `cargo check` after code updates.
