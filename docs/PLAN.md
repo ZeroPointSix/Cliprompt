@@ -115,3 +115,8 @@
 
 - [x] Show last-used timestamp in the preview panel.
 - [x] Run `npm run check` after code updates.
+
+## Iteration 23 (Copy snippet)
+
+- [x] Add a copy-snippet action in the preview panel.
+- [x] Run `npm run check` after code updates.

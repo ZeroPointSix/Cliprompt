@@ -333,6 +333,20 @@
     status = "Path copied";
   }
 
+  async function copySnippet(prompt: PromptEntry | null | undefined) {
+    if (!prompt) {
+      return;
+    }
+    const snippet = getRowPreview(prompt);
+    if (!snippet) {
+      status = "No snippet available";
+      return;
+    }
+    await writeText(snippet);
+    await markRecent(prompt);
+    status = "Snippet copied";
+  }
+
   async function openPrompt(prompt: PromptEntry | null | undefined) {
     if (!prompt) {
       return;
@@ -797,6 +811,9 @@
             </button>
             <button class="ghost" type="button" onclick={() => copyPath(activePrompt)}>
               Copy Path
+            </button>
+            <button class="ghost" type="button" onclick={() => copySnippet(activePrompt)}>
+              Copy Snippet
             </button>
             <button class="ghost" type="button" onclick={() => openPrompt(activePrompt)}>
               Open File

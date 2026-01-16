@@ -29,6 +29,7 @@ Minimal Windows prompt manager that stays local, is file driven, and pastes into
 - Clear recent shortcut: Ctrl+Shift+R
 - Toggle recent filter shortcut: Ctrl+Shift+E
 - Last-used timestamp in the preview panel
+- Copy-snippet action in the preview panel
 
 ## Quickstart
 
