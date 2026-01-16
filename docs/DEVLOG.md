@@ -36,3 +36,4 @@
 - Applied the recent filter to search results.
 - Added a top-tags bar for quick #tag filtering.
 - Added a clear button to remove all #tag filters.
+- Added a scope toggle for top-tags (all vs results).

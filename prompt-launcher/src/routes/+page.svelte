@@ -61,6 +61,7 @@
   let filtered = $state<PromptEntry[]>([]);
   let allPrompts = $state<PromptEntry[]>([]);
   let topTags = $state<{ tag: string; count: number }[]>([]);
+  let topTagsUseResults = $state<boolean>(false);
   let activePrompt = $state<PromptEntry | null>(null);
   let recentList = $state<{ prompt: PromptEntry; index: number }[]>([]);
   let favoritesList = $state<{ prompt: PromptEntry; index: number }[]>([]);
@@ -390,6 +391,9 @@
   }
 
   function getTagSource() {
+    if (topTagsUseResults) {
+      return filtered;
+    }
     if (showFavorites) {
       return allPrompts.filter((prompt) => isFavorite(prompt));
     }
@@ -738,9 +742,20 @@
       <span class="count">{filtered.length}</span>
     </div>
 
-    {#if topTags.length > 0}
+    {#if topTags.length > 0 || hasTagFilters() || topTagsUseResults}
       <div class="tag-bar">
         <span class="tag-bar-label">Top tags</span>
+        <button
+          class="tag-scope"
+          class:active={topTagsUseResults}
+          type="button"
+          onclick={(event) => {
+            event.stopPropagation();
+            topTagsUseResults = !topTagsUseResults;
+          }}
+        >
+          {topTagsUseResults ? "Scope: Results" : "Scope: All"}
+        </button>
         {#if hasTagFilters()}
           <button
             class="tag-clear"
@@ -1296,6 +1311,23 @@
   margin-left: 4px;
   font-size: 9px;
   opacity: 0.6;
+}
+
+.tag-scope {
+  font-size: 11px;
+  border-radius: 999px;
+  padding: 3px 8px;
+  border: 1px solid rgba(134, 157, 140, 0.4);
+  background: transparent;
+  color: #5b6a60;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.tag-scope.active {
+  background: rgba(221, 243, 232, 0.9);
+  border-color: rgba(61, 108, 90, 0.6);
+  color: #2d6a57;
 }
 
 .tag-clear {

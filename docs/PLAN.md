@@ -155,3 +155,8 @@
 
 - [x] Add a clear button to remove all #tag filters.
 - [x] Run `npm run check` after code updates.
+
+## Iteration 31 (Top tags scope)
+
+- [x] Add a scope toggle for top-tags (all vs results).
+- [x] Run `npm run check` after code updates.
