@@ -190,3 +190,8 @@
 
 - [x] Allow configuring how many top tags are shown.
 - [x] Run `npm run check` after code updates.
+
+## Iteration 38 (Shortcuts legend)
+
+- [x] Add a collapsible shortcuts legend under the search bar.
+- [x] Run `npm run check` after code updates.

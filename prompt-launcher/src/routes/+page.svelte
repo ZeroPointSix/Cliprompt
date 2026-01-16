@@ -58,6 +58,7 @@
   let hotkeyError = $state<string>("");
   let settingsError = $state<string>("");
   let showSettings = $state<boolean>(false);
+  let showShortcuts = $state<boolean>(false);
   let showFavorites = $state<boolean>(false);
   let showRecent = $state<boolean>(false);
   let currentHotkey = "";
@@ -810,7 +811,26 @@
         onkeydown={onSearchKeydown}
       />
       <span class="count">{filtered.length}</span>
+      <button
+        class="shortcut-toggle"
+        type="button"
+        onclick={() => (showShortcuts = !showShortcuts)}
+      >
+        {showShortcuts ? "Hide shortcuts" : "Shortcuts"}
+      </button>
     </div>
+
+    {#if showShortcuts}
+      <div class="shortcut-bar">
+        <span>Enter: paste</span>
+        <span>Esc: hide</span>
+        <span>Ctrl+Shift+F: favorite</span>
+        <span>Ctrl+Shift+G: favorites filter</span>
+        <span>Ctrl+Shift+R: clear recent</span>
+        <span>Ctrl+Shift+E: recent filter</span>
+        <span>Ctrl+Shift+S: tag scope</span>
+      </div>
+    {/if}
 
     {#if topTags.length > 0 || hasTagFilters() || config.top_tags_use_results}
       <div class="tag-bar">
@@ -1394,6 +1414,26 @@
 
 .count {
   font-size: 12px;
+  color: #5f6f63;
+}
+
+.shortcut-toggle {
+  font-size: 11px;
+  border-radius: 999px;
+  padding: 4px 10px;
+  border: 1px solid rgba(134, 157, 140, 0.4);
+  background: transparent;
+  color: #5b6a60;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.shortcut-bar {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  font-size: 11px;
   color: #5f6f63;
 }
 

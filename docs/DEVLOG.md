@@ -43,3 +43,4 @@
 - Auto-switched top-tags scope when Favorites/Recent filters are active.
 - Added an auto indicator when top-tags scope is overridden by filters.
 - Allowed configuring how many top tags are shown.
+- Added a collapsible shortcuts legend under the search bar.
