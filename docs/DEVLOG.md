@@ -12,6 +12,7 @@
 - Updated the PRD with tag management and quick-create requirements.
 - Ran `cargo test` in `prompt-launcher/src-tauri`; failed due to missing MSVC `link.exe`.
 - Ran `npm run tauri dev`; build failed due to missing MSVC `link.exe` and stopped the dev server.
+- Re-ran `cargo test` after toolchain install; all tests passed (9 unit tests).
 
 ## 2026-01-15
 
