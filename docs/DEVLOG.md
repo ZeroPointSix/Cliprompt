@@ -4,7 +4,9 @@
 
 - Fixed quick-create flow so the system editor is visible by hiding the launcher after opening the new file.
 - Added status messaging when the editor fails to open after file creation.
+- Added openPath fallback to Notepad and surfaced open errors in the status bar.
 - Ran `npm run check`; svelte-check reported 0 errors and 0 warnings.
+- Ran `npm run tauri dev`; app started successfully and was stopped after verification.
 - Ran `npm run tauri dev`; app started successfully and was stopped after verification.
 - Added metadata-backed tags stored in `.tags.json` with filename/folder fallback.
 - Implemented tag normalization rules (Chinese/ASCII alnum, length <= 10).

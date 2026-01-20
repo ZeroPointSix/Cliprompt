@@ -301,6 +301,53 @@
     }
   }
 
+  function formatError(error: unknown) {
+    if (typeof error === "string") {
+      return error;
+    }
+    if (error instanceof Error && error.message) {
+      return error.message;
+    }
+    try {
+      return JSON.stringify(error);
+    } catch {
+      return String(error);
+    }
+  }
+
+  async function openPathWithFallback(path: string) {
+    console.info("[openPathWithFallback] opening:", path);
+    const errors: string[] = [];
+    try {
+      await openPath(path);
+      return { ok: true as const };
+    } catch (error) {
+      const message = formatError(error);
+      console.error("[openPathWithFallback] default open failed:", message);
+      errors.push(message);
+    }
+    try {
+      await openPath(path, "notepad");
+      return { ok: true as const };
+    } catch (error) {
+      const message = formatError(error);
+      console.error("[openPathWithFallback] notepad open failed:", message);
+      errors.push(message);
+    }
+    try {
+      await openPath(path, "notepad.exe");
+      return { ok: true as const };
+    } catch (error) {
+      const message = formatError(error);
+      console.error("[openPathWithFallback] notepad.exe open failed:", message);
+      errors.push(message);
+    }
+    return {
+      ok: false as const,
+      message: errors.filter(Boolean).join(" | ") || "未知错误"
+    };
+  }
+
   async function chooseFolder() {
     const result = await openDialog({
       directory: true,
@@ -559,7 +606,10 @@
     if (!prompt) {
       return;
     }
-    await openPath(prompt.path);
+    const result = await openPathWithFallback(prompt.path);
+    if (!result.ok) {
+      status = `打开失败：${result.message}`;
+    }
   }
 
   async function openFolder() {
@@ -755,15 +805,19 @@
     try {
       const path = await invoke<string>("create_prompt_file", { name: trimmed });
       try {
-        await openPath(path);
-        await appWindow.hide();
-        status = "文件已创建并打开";
+        const result = await openPathWithFallback(path);
+        if (result.ok) {
+          await appWindow.hide();
+          status = "文件已创建并打开";
+        } else {
+          status = `文件已创建，但打开失败：${result.message}`;
+        }
       } catch {
         status = "文件已创建，但打开失败";
       }
       await refreshResults();
     } catch (error) {
-      status = typeof error === "string" ? error : "创建失败";
+      status = formatError(error) || "创建失败";
     }
   }
 
