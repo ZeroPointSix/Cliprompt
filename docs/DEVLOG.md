@@ -2,6 +2,9 @@
 
 ## 2026-01-20
 
+- Fixed quick-create flow so the system editor is visible by hiding the launcher after opening the new file.
+- Added status messaging when the editor fails to open after file creation.
+- Ran `npm run check`; svelte-check reported 0 errors and 0 warnings.
 - Added metadata-backed tags stored in `.tags.json` with filename/folder fallback.
 - Implemented tag normalization rules (Chinese/ASCII alnum, length <= 10).
 - Added pending-file handling so new empty `.txt` entries appear after save.

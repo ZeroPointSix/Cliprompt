@@ -754,8 +754,13 @@
     }
     try {
       const path = await invoke<string>("create_prompt_file", { name: trimmed });
-      await openPath(path);
-      status = "文件已创建";
+      try {
+        await openPath(path);
+        await appWindow.hide();
+        status = "文件已创建并打开";
+      } catch {
+        status = "文件已创建，但打开失败";
+      }
       await refreshResults();
     } catch (error) {
       status = typeof error === "string" ? error : "创建失败";
