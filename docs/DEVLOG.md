@@ -12,6 +12,10 @@
 - Updated FD/TDD docs to cover `open_prompt_path` and path validation behavior.
 - Killed leftover Vite dev process on port 1420 to unblock `tauri dev`.
 - Ran `cargo test`; all tests passed (9 unit tests).
+- Added MSI upgrade code and disallowed downgrades to enable in-place upgrade installs.
+- Ran `npm run tauri build`; generated MSI and NSIS installers.
+- Updated PRD to include upgrade/uninstall and data retention requirements.
+- Updated TDD with manual upgrade verification steps.
 - Ran `npm run tauri dev`; app started successfully and was stopped after verification.
 - Ran `npm run check`; svelte-check reported 0 errors and 0 warnings.
 - Ran `npm run tauri dev`; app started successfully and was stopped after verification.
