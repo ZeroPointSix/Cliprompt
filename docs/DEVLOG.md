@@ -11,6 +11,7 @@
 - Added FD and TDD documents for tags + quick-create.
 - Updated the PRD with tag management and quick-create requirements.
 - Ran `cargo test` in `prompt-launcher/src-tauri`; failed due to missing MSVC `link.exe`.
+- Ran `npm run tauri dev`; build failed due to missing MSVC `link.exe` and stopped the dev server.
 
 ## 2026-01-15
 
