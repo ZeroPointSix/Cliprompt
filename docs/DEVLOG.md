@@ -20,6 +20,7 @@
 - Ran `npm run dev`; frontend compiled without a11y warnings.
 - Ran `cargo test`; all tests passed (9 unit tests).
 - Ran `npm run tauri dev`; app started successfully and was stopped after verification.
+- Ran `cargo test` again; all tests passed (9 unit tests, no code changes).
 
 ## 2026-01-15
 
