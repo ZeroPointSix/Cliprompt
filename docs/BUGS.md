@@ -3,26 +3,29 @@
 ## 2026-01-20 21:50:44
 
 ### 现象
-- 新建短语后提示“文件已创建，但打开失败”。
+- 新建短语后提示“文件已创建，但打开失败”，并提示 `open_path` 权限不足。
 
 ### 复现步骤
 1. 点击搜索框右侧的 `+`。
 2. 输入文件名并确认。
-3. 状态栏显示“文件已创建，但打开失败”。
+3. 状态栏显示“Not allowed to open path ...”。
 
 ### 影响范围
 - 无法自动打开系统编辑器，影响快速创建流程。
 
 ### 初步原因
 - `openPath` 打开默认编辑器失败，错误信息未回显给用户。
+- 运行时权限缺失：`opener.open_path not allowed`。
 
 ### 解决方案
 - 增加 `openPath` 失败回显（状态栏显示错误详情）。
 - 增加打开失败时的 fallback（尝试 `notepad` 与 `notepad.exe`）。
 - 为打开失败添加控制台日志便于定位。
+- 补充 `opener:allow-open-path` capability 权限。
+- 为 `open_path` 增加 allow scope（允许用户自定义目录路径）。
 
 ### 状态
-- 已修复：`prompt-launcher/src/routes/+page.svelte`。
+- 已修复：`prompt-launcher/src/routes/+page.svelte`、`prompt-launcher/src-tauri/capabilities/default.json`。
 
 ## 2026-01-20 21:33:14
 
