@@ -13,6 +13,8 @@
 - Ran `cargo test` in `prompt-launcher/src-tauri`; failed due to missing MSVC `link.exe`.
 - Ran `npm run tauri dev`; build failed due to missing MSVC `link.exe` and stopped the dev server.
 - Re-ran `cargo test` after toolchain install; all tests passed (9 unit tests).
+- Re-ran `cargo test`; all tests passed (9 unit tests).
+- Added `docs/DECISIONS.md` to capture design/optimization decisions.
 
 ## 2026-01-15
 
