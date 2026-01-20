@@ -16,6 +16,9 @@
 - Re-ran `cargo test`; all tests passed (9 unit tests).
 - Added `docs/DECISIONS.md` to capture design/optimization decisions.
 - Ran `cargo test` again; all tests passed (9 unit tests).
+- Fixed Svelte a11y warnings by switching result items to buttons and using pointerdown on overlays.
+- Ran `npm run dev`; frontend compiled without a11y warnings.
+- Ran `cargo test`; all tests passed (9 unit tests).
 
 ## 2026-01-15
 

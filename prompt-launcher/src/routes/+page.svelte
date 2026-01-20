@@ -601,6 +601,7 @@
     void usePrompt(prompt);
   }
 
+
   function onResultContextMenu(
     event: MouseEvent,
     prompt: PromptEntry,
@@ -678,6 +679,17 @@
     tagInput = "";
     removeTagOptions = [];
     removeTagSelection = new Set();
+  }
+
+  function stopPropagation(event: Event) {
+    event.stopPropagation();
+  }
+
+  function onBackdropKeydown(event: KeyboardEvent) {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      closeTagEditor();
+    }
   }
 
   function toggleRemoveTag(tag: string) {
@@ -1263,12 +1275,11 @@
                          </div>
                     {:else}
                         {#each filtered as prompt, index (prompt.id)}
-                            <div
+                            <button
                                 class="result-item"
                                 class:selected={index === selectedIndex}
                                 class:multi-selected={selectedIds.has(prompt.id)}
-                                role="button"
-                                tabindex="0"
+                                type="button"
                                 onclick={(event) => onResultClick(event, prompt, index)}
                                 oncontextmenu={(event) => onResultContextMenu(event, prompt, index)}
                                 onmouseenter={() => selectedIndex = index}
@@ -1286,7 +1297,7 @@
                                     </div>
                                     <div class="result-preview">{@html getRowPreviewHtml(prompt)}</div>
                                 </div>
-                            </div>
+                            </button>
                         {/each}
                     {/if}
                 </div>
@@ -1310,7 +1321,7 @@
         <div
             class="context-menu"
             style={`top: ${contextMenu.y}px; left: ${contextMenu.x}px;`}
-            on:click|stopPropagation
+            onpointerdown={stopPropagation}
         >
             <button class="context-item" onclick={() => openTagEditor("add")}>添加标签</button>
             <button class="context-item" onclick={() => openTagEditor("remove")}>移除标签</button>
@@ -1325,8 +1336,19 @@
     {/if}
 
     {#if tagEditorMode}
-        <div class="modal-backdrop" onclick={closeTagEditor}></div>
-        <div class="modal" on:click|stopPropagation>
+        <div
+            class="modal-backdrop"
+            role="button"
+            tabindex="0"
+            onpointerdown={closeTagEditor}
+            onkeydown={onBackdropKeydown}
+        ></div>
+        <div
+            class="modal"
+            role="dialog"
+            tabindex="-1"
+            onpointerdown={stopPropagation}
+        >
             {#if tagEditorMode === "add"}
                 <div class="modal-title">添加标签</div>
                 <input
@@ -1490,6 +1512,11 @@
   border-left: 3px solid transparent;
   display: flex;
   align-items: center;
+  background: transparent;
+  border: none;
+  width: 100%;
+  text-align: left;
+  font: inherit;
 }
 
 .result-item.selected {
@@ -1610,6 +1637,8 @@
   inset: 0;
   background: rgba(15, 23, 42, 0.28);
   z-index: 1900;
+  border: none;
+  padding: 0;
 }
 
 .modal {
