@@ -58,12 +58,14 @@
 2. 输入文件名（必填）。
 3. 在 `prompts_dir` 下创建 `文件名.txt`。
 4. 同名则阻止创建并提示。
-5. 使用系统默认文本编辑器打开。
+5. 通过后端命令打开系统默认编辑器（路径需在 `prompts_dir` 内）。
 6. 保存并关闭后纳入搜索结果。
 
 ## 7. 后端接口（Tauri）
 - `create_prompt_file(name: String) -> Result<String, String>`
   - 返回创建后的文件路径。
+- `open_prompt_path(path: String) -> Result<(), String>`
+  - 校验路径在 `prompts_dir` 内并打开文件（Windows 上 fallback 到记事本）。
 - `update_prompt_tags(paths: Vec<String>, add: Vec<String>, remove: Vec<String>) -> Result<(), String>`
   - 写入 `.tags.json` 并触发刷新。
 
@@ -71,6 +73,7 @@
 - 标签非法：提示“标签仅允许中英文数字，长度 1–10”。
 - 未选中结果：右键菜单置灰或提示“请选择项目”。
 - 文件已存在：提示“文件已存在，无法创建”。
+- 打开失败：提示具体失败原因。
 - 读取/写入失败：提示“标签保存失败，请重试”。
 
 ## 9. 兼容与迁移

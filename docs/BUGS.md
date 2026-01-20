@@ -1,5 +1,49 @@
 # Bug 记录
 
+## 2026-01-20 22:25:10
+
+### 现象
+- 启动 `npm run tauri dev` 失败，提示 `Port 1420 is already in use`。
+
+### 复现步骤
+1. 进入 `prompt-launcher` 目录。
+2. 执行 `npm run tauri dev`。
+3. Vite 报错端口占用。
+
+### 影响范围
+- Tauri dev 无法启动，阻塞验证。
+
+### 初步原因
+- 上一次 Vite dev 进程未退出，占用 1420 端口。
+
+### 解决方案
+- 结束占用端口的进程后重启。
+
+### 状态
+- 已处理：终止 PID 33508。
+
+## 2026-01-20 22:20:12
+
+### 现象
+- 启动 `npm run tauri dev` 编译失败。
+
+### 复现步骤
+1. 进入 `prompt-launcher` 目录。
+2. 执行 `npm run tauri dev`。
+3. Rust 编译报错：`open_path` 需要 `Into<String>`，但传入了 `&PathBuf`（E0277）。
+
+### 影响范围
+- Tauri 后端无法编译，应用无法启动。
+
+### 初步原因
+- `open_prompt_path` 中调用 `app.opener().open_path` 时传入了 `&PathBuf`，类型不匹配。
+
+### 解决方案
+- 将 `PathBuf` 转成 `String` 后再调用 `open_path`。
+
+### 状态
+- 已修复：`prompt-launcher/src-tauri/src/lib.rs`。
+
 ## 2026-01-20 21:50:44
 
 ### 现象
@@ -16,6 +60,7 @@
 ### 初步原因
 - `openPath` 打开默认编辑器失败，错误信息未回显给用户。
 - 运行时权限缺失：`opener.open_path not allowed`。
+- `opener` scope 不匹配用户自定义路径，导致 “Not allowed to open path ...”。
 
 ### 解决方案
 - 增加 `openPath` 失败回显（状态栏显示错误详情）。
@@ -23,9 +68,10 @@
 - 为打开失败添加控制台日志便于定位。
 - 补充 `opener:allow-open-path` capability 权限。
 - 为 `open_path` 增加 allow scope（允许用户自定义目录路径）。
+- 改为通过后端命令打开文件，校验路径在提示词目录内，避免前端 opener scope 限制。
 
 ### 状态
-- 已修复：`prompt-launcher/src/routes/+page.svelte`、`prompt-launcher/src-tauri/capabilities/default.json`。
+- 已修复：`prompt-launcher/src/routes/+page.svelte`、`prompt-launcher/src-tauri/capabilities/default.json`、`prompt-launcher/src-tauri/src/lib.rs`。
 
 ## 2026-01-20 21:33:14
 

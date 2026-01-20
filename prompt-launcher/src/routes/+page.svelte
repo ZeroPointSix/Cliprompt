@@ -6,7 +6,6 @@
   import { open as openDialog } from "@tauri-apps/plugin-dialog";
   import { register, unregister } from "@tauri-apps/plugin-global-shortcut";
   import { writeText } from "@tauri-apps/plugin-clipboard-manager";
-  import { openPath } from "@tauri-apps/plugin-opener";
 
   type PromptEntry = {
     id: string;
@@ -316,36 +315,15 @@
   }
 
   async function openPathWithFallback(path: string) {
-    console.info("[openPathWithFallback] opening:", path);
-    const errors: string[] = [];
+    console.info("[openPromptPath] opening:", path);
     try {
-      await openPath(path);
+      await invoke("open_prompt_path", { path });
       return { ok: true as const };
     } catch (error) {
-      const message = formatError(error);
-      console.error("[openPathWithFallback] default open failed:", message);
-      errors.push(message);
+      const message = formatError(error) || "未知错误";
+      console.error("[openPromptPath] open failed:", message);
+      return { ok: false as const, message };
     }
-    try {
-      await openPath(path, "notepad");
-      return { ok: true as const };
-    } catch (error) {
-      const message = formatError(error);
-      console.error("[openPathWithFallback] notepad open failed:", message);
-      errors.push(message);
-    }
-    try {
-      await openPath(path, "notepad.exe");
-      return { ok: true as const };
-    } catch (error) {
-      const message = formatError(error);
-      console.error("[openPathWithFallback] notepad.exe open failed:", message);
-      errors.push(message);
-    }
-    return {
-      ok: false as const,
-      message: errors.filter(Boolean).join(" | ") || "未知错误"
-    };
   }
 
   async function chooseFolder() {
@@ -616,7 +594,10 @@
     if (!config.prompts_dir) {
       return;
     }
-    await openPath(config.prompts_dir);
+    const result = await openPathWithFallback(config.prompts_dir);
+    if (!result.ok) {
+      status = `打开失败：${result.message}`;
+    }
   }
 
   function getSelectedPrompts() {

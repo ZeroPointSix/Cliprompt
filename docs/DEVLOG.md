@@ -7,6 +7,11 @@
 - Added openPath fallback to Notepad and surfaced open errors in the status bar.
 - Added `opener:allow-open-path` capability to allow opening files with the system editor.
 - Added opener scope to allow opening user-selected prompt files.
+- Routed file opening through a backend command with prompts-dir path validation to bypass opener scope limits.
+- Fixed open_path type mismatch by converting PathBuf to String before calling the opener API.
+- Updated FD/TDD docs to cover `open_prompt_path` and path validation behavior.
+- Killed leftover Vite dev process on port 1420 to unblock `tauri dev`.
+- Ran `cargo test`; all tests passed (9 unit tests).
 - Ran `npm run tauri dev`; app started successfully and was stopped after verification.
 - Ran `npm run check`; svelte-check reported 0 errors and 0 warnings.
 - Ran `npm run tauri dev`; app started successfully and was stopped after verification.

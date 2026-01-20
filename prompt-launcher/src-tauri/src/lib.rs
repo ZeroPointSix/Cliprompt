@@ -19,6 +19,7 @@ use tauri::{
     AppHandle, Manager, State,
 };
 use tauri::Emitter;
+use tauri_plugin_opener::OpenerExt;
 
 use config::{load_or_init, save, AppConfig};
 use prompts::{index_prompts, search_prompts as search_prompts_impl, PromptEntry, normalize_tag};
@@ -58,6 +59,26 @@ fn get_config(state: State<Arc<AppState>>) -> AppConfig {
 #[tauri::command]
 fn list_prompts(state: State<Arc<AppState>>) -> Vec<PromptEntry> {
     state.prompts.read().unwrap().clone()
+}
+
+fn resolve_prompts_root(state: &AppState) -> Result<PathBuf, String> {
+    let dir = state.config.lock().unwrap().prompts_dir.clone();
+    if dir.trim().is_empty() {
+        return Err("提示词目录未配置".to_string());
+    }
+    let root = PathBuf::from(dir);
+    root.canonicalize()
+        .map_err(|e| format!("解析提示词目录失败: {e}"))
+}
+
+fn resolve_prompt_path(root: &Path, path: &Path) -> Result<PathBuf, String> {
+    let target = path
+        .canonicalize()
+        .map_err(|e| format!("解析路径失败: {e}"))?;
+    if !target.starts_with(root) {
+        return Err("路径不在提示词目录中".to_string());
+    }
+    Ok(target)
 }
 
 #[tauri::command]
@@ -150,6 +171,38 @@ fn create_prompt_file(
         .unwrap()
         .insert(path_string.clone());
     Ok(path_string)
+}
+
+#[tauri::command]
+fn open_prompt_path(
+    app: AppHandle,
+    state: State<Arc<AppState>>,
+    path: String,
+) -> Result<(), String> {
+    let root = resolve_prompts_root(state.inner())?;
+    let target = resolve_prompt_path(&root, Path::new(&path))?;
+    let target_str = target.to_string_lossy().to_string();
+    if let Err(error) = app.opener().open_path(target_str.clone(), None::<&str>) {
+        #[cfg(target_os = "windows")]
+        {
+            let mut errors = vec![format!("{error}")];
+            if let Err(err) = app.opener().open_path(target_str.clone(), Some("notepad")) {
+                errors.push(format!("{err}"));
+            } else {
+                return Ok(());
+            }
+            if let Err(err) = app.opener().open_path(target_str.clone(), Some("notepad.exe")) {
+                errors.push(format!("{err}"));
+            } else {
+                return Ok(());
+            }
+            return Err(format!("打开失败：{}", errors.join(" | ")));
+        }
+        #[allow(unreachable_code)]
+        Err(format!("打开失败：{error}"))
+    } else {
+        Ok(())
+    }
 }
 
 #[tauri::command]
@@ -647,6 +700,7 @@ pub fn run() {
             search_prompts,
             set_prompts_dir,
             create_prompt_file,
+            open_prompt_path,
             set_auto_paste,
             set_hotkey,
             set_auto_start,
