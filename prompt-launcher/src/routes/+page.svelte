@@ -64,9 +64,22 @@
   let showFavorites = $state<boolean>(false);
   let showRecent = $state<boolean>(false);
   let currentHotkey = "";
+  let selectedIds = $state<Set<string>>(new Set());
+  let contextMenu = $state<{ visible: boolean; x: number; y: number }>({
+    visible: false,
+    x: 0,
+    y: 0
+  });
+  let contextTarget = $state<PromptEntry | null>(null);
+  let tagEditorMode = $state<"add" | "remove" | null>(null);
+  let tagInput = $state<string>("");
+  let removeTagOptions = $state<string[]>([]);
+  let removeTagSelection = $state<Set<string>>(new Set());
+  let tagSuggestions = $state<string[]>([]);
 
   let filtered = $state<PromptEntry[]>([]);
   let allPrompts = $state<PromptEntry[]>([]);
+  let allTags = $state<string[]>([]);
   let topTags = $state<{ tag: string; count: number }[]>([]);
   let topTagsScopeBeforeFilter = $state<boolean | null>(null);
   let activePrompt = $state<PromptEntry | null>(null);
@@ -78,6 +91,7 @@
 
   let unlistenPrompts: UnlistenFn | null = null;
   let unlistenFocus: UnlistenFn | null = null;
+  let windowClickHandler: ((event: MouseEvent) => void) | null = null;
   let windowJustShown = false;
   let focusLossTimer: ReturnType<typeof setTimeout> | null = null;
   let lastToggleTime = 0;
@@ -114,6 +128,15 @@
     const tagSource = getTagSource();
     const tagLimit = config.top_tags_limit > 0 ? config.top_tags_limit : 8;
     topTags = buildTopTags(tagSource, tagLimit);
+    const tagSet = new Set<string>();
+    allPrompts.forEach((prompt) => {
+      prompt.tags?.forEach((tag) => tagSet.add(tag));
+    });
+    allTags = Array.from(tagSet).sort((a, b) => a.localeCompare(b));
+  });
+
+  $effect(() => {
+    tagSuggestions = getTagSuggestions(query, allTags);
   });
 
   // Dynamic window height adjustment based on content
@@ -166,6 +189,11 @@
     await registerHotkey(config.hotkey);
     await refreshResults();
 
+    windowClickHandler = () => {
+      closeContextMenu();
+    };
+    window.addEventListener("click", windowClickHandler);
+
     unlistenPrompts = await listen<PromptEntry[]>("prompts-updated", (event) => {
       allPrompts = event.payload ?? [];
       selectedIndex = 0;
@@ -207,6 +235,9 @@
     }
     if (unlistenFocus) {
       unlistenFocus();
+    }
+    if (windowClickHandler) {
+      window.removeEventListener("click", windowClickHandler);
     }
     if (currentHotkey) {
       await unregister(currentHotkey).catch(() => {});
@@ -538,6 +569,187 @@
     await openPath(config.prompts_dir);
   }
 
+  function getSelectedPrompts() {
+    if (selectedIds.size === 0) {
+      return [];
+    }
+    return filtered.filter((prompt) => selectedIds.has(prompt.id));
+  }
+
+  function setSingleSelection(prompt: PromptEntry) {
+    selectedIds = new Set([prompt.id]);
+  }
+
+  function toggleSelection(prompt: PromptEntry) {
+    const next = new Set(selectedIds);
+    if (next.has(prompt.id)) {
+      next.delete(prompt.id);
+    } else {
+      next.add(prompt.id);
+    }
+    selectedIds = next;
+  }
+
+  function onResultClick(event: MouseEvent, prompt: PromptEntry, index: number) {
+    if (event.ctrlKey) {
+      selectedIndex = index;
+      toggleSelection(prompt);
+      return;
+    }
+    selectedIndex = index;
+    setSingleSelection(prompt);
+    void usePrompt(prompt);
+  }
+
+  function onResultContextMenu(
+    event: MouseEvent,
+    prompt: PromptEntry,
+    index: number
+  ) {
+    event.preventDefault();
+    selectedIndex = index;
+    if (!selectedIds.has(prompt.id)) {
+      setSingleSelection(prompt);
+    }
+    contextTarget = prompt;
+    contextMenu = {
+      visible: true,
+      x: event.clientX,
+      y: event.clientY
+    };
+  }
+
+  function closeContextMenu() {
+    if (!contextMenu.visible) {
+      return;
+    }
+    contextMenu = { ...contextMenu, visible: false };
+    contextTarget = null;
+  }
+
+  function getTagSuggestions(value: string, tags: string[]) {
+    const parts = value.trim().split(/\s+/);
+    const last = parts[parts.length - 1] ?? "";
+    if (!last.startsWith("#")) {
+      return [];
+    }
+    const keyword = last.slice(1).toLowerCase();
+    return tags
+      .filter((tag) => tag.toLowerCase().startsWith(keyword))
+      .slice(0, 8);
+  }
+
+  function applyTagSuggestion(tag: string) {
+    const parts = query.trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) {
+      query = `#${tag}`;
+    } else {
+      parts[parts.length - 1] = `#${tag}`;
+      query = parts.join(" ").trim();
+    }
+    selectedIndex = 0;
+    scheduleSearch();
+    focusSearch();
+  }
+
+  function openTagEditor(mode: "add" | "remove") {
+    const selected = getSelectedPrompts();
+    if (selected.length === 0) {
+      status = "请选择项目";
+      return;
+    }
+    tagEditorMode = mode;
+    tagInput = "";
+    removeTagSelection = new Set();
+    if (mode === "remove") {
+      const tagSet = new Set<string>();
+      selected.forEach((prompt) => {
+        prompt.tags?.forEach((tag) => tagSet.add(tag));
+      });
+      removeTagOptions = Array.from(tagSet).sort((a, b) => a.localeCompare(b));
+    } else {
+      removeTagOptions = [];
+    }
+    closeContextMenu();
+  }
+
+  function closeTagEditor() {
+    tagEditorMode = null;
+    tagInput = "";
+    removeTagOptions = [];
+    removeTagSelection = new Set();
+  }
+
+  function toggleRemoveTag(tag: string) {
+    const next = new Set(removeTagSelection);
+    if (next.has(tag)) {
+      next.delete(tag);
+    } else {
+      next.add(tag);
+    }
+    removeTagSelection = next;
+  }
+
+  async function applyTagEditor() {
+    const selected = getSelectedPrompts();
+    if (selected.length === 0) {
+      status = "请选择项目";
+      closeTagEditor();
+      return;
+    }
+    const paths = selected.map((prompt) => prompt.path);
+    try {
+      if (tagEditorMode === "add") {
+        const tokens = tagInput
+          .split(/\s+/)
+          .map((token) => token.trim())
+          .filter(Boolean);
+        if (tokens.length === 0) {
+          status = "标签不能为空";
+          return;
+        }
+        await invoke<PromptEntry[]>("update_prompt_tags", {
+          paths,
+          add: tokens,
+          remove: []
+        });
+        status = "标签已添加";
+      } else if (tagEditorMode === "remove") {
+        const tokens = Array.from(removeTagSelection);
+        if (tokens.length === 0) {
+          status = "请选择要移除的标签";
+          return;
+        }
+        await invoke<PromptEntry[]>("update_prompt_tags", {
+          paths,
+          add: [],
+          remove: tokens
+        });
+        status = "标签已移除";
+      }
+      closeTagEditor();
+      await refreshResults();
+    } catch (error) {
+      status = typeof error === "string" ? error : "标签更新失败";
+    }
+  }
+
+  async function createQuickPrompt() {
+    const name = window.prompt("输入文件名");
+    const trimmed = name?.trim() ?? "";
+    if (!trimmed) {
+      return;
+    }
+    try {
+      const path = await invoke<string>("create_prompt_file", { name: trimmed });
+      await openPath(path);
+      status = "文件已创建";
+      await refreshResults();
+    } catch (error) {
+      status = typeof error === "string" ? error : "创建失败";
+    }
+  }
+
   async function toggleSettings() {
     showSettings = !showSettings;
     await tick();
@@ -819,6 +1031,16 @@
   }
 
   function onSearchKeydown(event: KeyboardEvent) {
+    if (event.key === "Escape" && contextMenu.visible) {
+      event.preventDefault();
+      closeContextMenu();
+      return;
+    }
+    if (event.key === "Escape" && tagEditorMode) {
+      event.preventDefault();
+      closeTagEditor();
+      return;
+    }
     if (
       event.ctrlKey &&
       event.shiftKey &&
@@ -935,6 +1157,14 @@
       selectedIndex = 0;
     }
     activePrompt = filtered[selectedIndex] ?? null;
+    const validIds = new Set(filtered.map((prompt) => prompt.id));
+    const nextSelection = new Set(
+      Array.from(selectedIds).filter((id) => validIds.has(id))
+    );
+    if (nextSelection.size === 0 && activePrompt) {
+      nextSelection.add(activePrompt.id);
+    }
+    selectedIds = nextSelection;
   }
 </script>
 
@@ -954,6 +1184,12 @@
             oninput={onSearchInput}
             onkeydown={onSearchKeydown}
         />
+        <button class="add-btn" onclick={createQuickPrompt} title="新建短语">
+             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+             </svg>
+        </button>
         <button class="settings-btn" class:active={showSettings} onclick={toggleSettings} title="Settings">
              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="12" cy="12" r="3"></circle>
@@ -1010,6 +1246,15 @@
                     </div>
                 </div>
             {:else}
+                {#if tagSuggestions.length > 0}
+                    <div class="tag-suggestions">
+                        {#each tagSuggestions as tag}
+                            <button class="tag-suggestion" onclick={() => applyTagSuggestion(tag)}>
+                                #{tag}
+                            </button>
+                        {/each}
+                    </div>
+                {/if}
                 <div class="results-list">
                     {#if filtered.length === 0}
                          <div class="empty-state">
@@ -1021,9 +1266,11 @@
                             <div
                                 class="result-item"
                                 class:selected={index === selectedIndex}
+                                class:multi-selected={selectedIds.has(prompt.id)}
                                 role="button"
                                 tabindex="0"
-                                onclick={() => { selectedIndex = index; usePrompt(prompt); }}
+                                onclick={(event) => onResultClick(event, prompt, index)}
+                                oncontextmenu={(event) => onResultContextMenu(event, prompt, index)}
                                 onmouseenter={() => selectedIndex = index}
                             >
                                 <div class="result-main">
@@ -1056,6 +1303,64 @@
                     {/if}
                 </div>
             {/if}
+        </div>
+    {/if}
+
+    {#if contextMenu.visible}
+        <div
+            class="context-menu"
+            style={`top: ${contextMenu.y}px; left: ${contextMenu.x}px;`}
+            on:click|stopPropagation
+        >
+            <button class="context-item" onclick={() => openTagEditor("add")}>添加标签</button>
+            <button class="context-item" onclick={() => openTagEditor("remove")}>移除标签</button>
+            <button
+                class="context-item"
+                onclick={() => {
+                  closeContextMenu();
+                  openPrompt(contextTarget);
+                }}
+            >打开文件</button>
+        </div>
+    {/if}
+
+    {#if tagEditorMode}
+        <div class="modal-backdrop" onclick={closeTagEditor}></div>
+        <div class="modal" on:click|stopPropagation>
+            {#if tagEditorMode === "add"}
+                <div class="modal-title">添加标签</div>
+                <input
+                    class="modal-input"
+                    placeholder="用空格分隔多个标签"
+                    value={tagInput}
+                    oninput={(event) => {
+                      const target = event.target as HTMLInputElement | null;
+                      tagInput = target?.value ?? "";
+                    }}
+                />
+            {:else}
+                <div class="modal-title">移除标签</div>
+                {#if removeTagOptions.length === 0}
+                    <div class="modal-hint">当前选择没有可移除标签</div>
+                {:else}
+                    <div class="modal-options">
+                        {#each removeTagOptions as tag}
+                            <label class="modal-option">
+                                <input
+                                    type="checkbox"
+                                    checked={removeTagSelection.has(tag)}
+                                    onchange={() => toggleRemoveTag(tag)}
+                                />
+                                <span>#{tag}</span>
+                            </label>
+                        {/each}
+                    </div>
+                {/if}
+            {/if}
+            <div class="modal-actions">
+                <button class="btn-sm" onclick={applyTagEditor}>确定</button>
+                <button class="btn-sm ghost" onclick={closeTagEditor}>取消</button>
+            </div>
         </div>
     {/if}
 </main>
@@ -1224,6 +1529,150 @@
   color: #44a;
   padding: 1px 6px;
   border-radius: 12px;
+}
+
+.add-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background: #ffffff;
+  color: #1f2a37;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 8px;
+  cursor: pointer;
+}
+
+.add-btn:hover {
+  background: #f3f5f9;
+}
+
+.tag-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 16px 0 16px;
+  background: var(--bg-color);
+  border-left: 1px solid var(--border-color);
+  border-right: 1px solid var(--border-color);
+}
+
+.tag-suggestion {
+  border: 1px solid var(--border-color);
+  background: #ffffff;
+  color: #1f2a37;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.tag-suggestion:hover {
+  background: #f3f5f9;
+}
+
+.result-item.multi-selected {
+  background: #e9f2ff;
+  border-color: #cfe2ff;
+}
+
+.context-menu {
+  position: fixed;
+  background: #ffffff;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 6px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.12);
+  z-index: 2000;
+  min-width: 140px;
+}
+
+.context-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  color: #111827;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.context-item:hover {
+  background: #f3f5f9;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.28);
+  z-index: 1900;
+}
+
+.modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: #ffffff;
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  padding: 16px;
+  min-width: 280px;
+  max-width: 360px;
+  z-index: 2001;
+}
+
+.modal-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: #111827;
+}
+
+.modal-input {
+  width: 100%;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+}
+
+.modal-options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.modal-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #1f2a37;
+}
+
+.modal-hint {
+  font-size: 12px;
+  color: #6b7280;
+  margin-bottom: 10px;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.btn-sm.ghost {
+  background: transparent;
+  border: 1px solid var(--border-color);
 }
 
 .result-preview {

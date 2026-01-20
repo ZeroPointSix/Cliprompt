@@ -4,6 +4,8 @@ use std::fs;
 use std::path::Path;
 use walkdir::WalkDir;
 
+use crate::tags_meta::{load_tags_meta, resolve_tags_for_path, TagsMeta};
+
 #[derive(Debug, Clone, Serialize)]
 pub struct PromptEntry {
     pub id: String,
@@ -52,6 +54,13 @@ pub fn search_prompts(
 }
 
 pub fn index_prompts(dir: &Path) -> Vec<PromptEntry> {
+    let meta = match load_tags_meta(dir) {
+        Ok(meta) => meta,
+        Err(err) => {
+            eprintln!("[tags_meta] load failed: {err}");
+            TagsMeta::default()
+        }
+    };
     let mut entries = Vec::new();
     for entry in WalkDir::new(dir).follow_links(true).into_iter().flatten() {
         if !entry.file_type().is_file() {
@@ -61,25 +70,27 @@ pub fn index_prompts(dir: &Path) -> Vec<PromptEntry> {
         if !is_prompt_file(path) {
             continue;
         }
-        if let Some(prompt) = read_prompt(path, dir) {
+        if let Some(prompt) = read_prompt(path, dir, &meta) {
             entries.push(prompt);
         }
     }
     entries
 }
 
-fn read_prompt(path: &Path, root: &Path) -> Option<PromptEntry> {
+fn read_prompt(path: &Path, root: &Path, meta: &TagsMeta) -> Option<PromptEntry> {
     let body = fs::read_to_string(path).ok()?;
     let title = path
         .file_stem()
         .unwrap_or_default()
         .to_string_lossy()
         .to_string();
-    let mut tags: HashSet<String> = extract_tags(&title).into_iter().collect();
+    let mut fallback_tags: HashSet<String> = extract_tags(&title).into_iter().collect();
     for tag in extract_path_tags(path, root) {
-        tags.insert(tag);
+        fallback_tags.insert(tag);
     }
-    let mut tags: Vec<String> = tags.into_iter().collect();
+    let fallback: Vec<String> = fallback_tags.into_iter().collect();
+    let resolved = resolve_tags_for_path(meta, root, path, fallback);
+    let mut tags = normalize_tags(resolved);
     tags.sort();
     let preview = make_preview(&body);
     let path_string = path.to_string_lossy().to_string();
@@ -159,13 +170,35 @@ fn extract_path_tags(path: &Path, root: &Path) -> Vec<String> {
     tags
 }
 
-fn normalize_tag(raw: &str) -> Option<String> {
-    let trimmed = raw.trim_matches(|c: char| !c.is_alphanumeric() && c != '-' && c != '_');
+pub(crate) fn normalize_tag(raw: &str) -> Option<String> {
+    let trimmed = raw.trim();
     if trimmed.is_empty() {
-        None
-    } else {
-        Some(trimmed.to_ascii_lowercase())
+        return None;
     }
+    if trimmed.chars().count() > 10 {
+        return None;
+    }
+    if !trimmed.chars().all(is_allowed_tag_char) {
+        return None;
+    }
+    Some(trimmed.to_ascii_lowercase())
+}
+
+fn is_allowed_tag_char(ch: char) -> bool {
+    ch.is_ascii_alphanumeric() || (ch >= '\u{4E00}' && ch <= '\u{9FFF}')
+}
+
+fn normalize_tags(raw: Vec<String>) -> Vec<String> {
+    let mut seen = HashSet::new();
+    let mut tags = Vec::new();
+    for tag in raw {
+        if let Some(normalized) = normalize_tag(&tag) {
+            if seen.insert(normalized.clone()) {
+                tags.push(normalized);
+            }
+        }
+    }
+    tags
 }
 
 fn split_query(query: &str) -> (Vec<String>, Vec<String>) {
@@ -285,4 +318,61 @@ fn is_word_boundary(text: &str, index: usize) -> bool {
     let prev_is_word = prev.map(|c| c.is_alphanumeric()).unwrap_or(false);
     let next_is_word = next.map(|c| c.is_alphanumeric()).unwrap_or(false);
     !prev_is_word || !next_is_word
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn make_temp_dir(prefix: &str) -> std::path::PathBuf {
+        let mut dir = std::env::temp_dir();
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        dir.push(format!("{prefix}-{nanos}"));
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn normalize_tag_accepts_chinese_and_ascii() {
+        assert_eq!(normalize_tag("Tag1"), Some("tag1".to_string()));
+        assert_eq!(normalize_tag("标签1"), Some("标签1".to_string()));
+    }
+
+    #[test]
+    fn normalize_tag_rejects_special_chars() {
+        assert_eq!(normalize_tag("tag-1"), None);
+        assert_eq!(normalize_tag("tag_1"), None);
+        assert_eq!(normalize_tag("tag!"), None);
+        assert_eq!(normalize_tag("tag 1"), None);
+    }
+
+    #[test]
+    fn normalize_tag_rejects_overlong() {
+        assert_eq!(normalize_tag("12345678901"), None);
+    }
+
+    #[test]
+    fn split_query_filters_invalid_tags() {
+        let (tags, terms) = split_query("#Tag #tag-1 foo");
+        assert_eq!(tags, vec!["tag".to_string()]);
+        assert_eq!(terms, vec!["foo".to_string()]);
+    }
+
+    #[test]
+    fn tags_match_and_logic() {
+        let dir = make_temp_dir("tags-match");
+        let path = dir.join("示例 #a #b.txt");
+        fs::write(&path, "content").unwrap();
+        let meta = TagsMeta::default();
+        let prompt = read_prompt(&path, &dir, &meta).expect("read prompt");
+
+        assert!(tags_match(&prompt, &["a".to_string()]));
+        assert!(tags_match(&prompt, &["a".to_string(), "b".to_string()]));
+        assert!(!tags_match(&prompt, &["a".to_string(), "c".to_string()]));
+    }
 }

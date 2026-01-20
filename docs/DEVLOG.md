@@ -1,5 +1,16 @@
 # Dev Log
 
+## 2026-01-20
+
+- Added metadata-backed tags stored in `.tags.json` with filename/folder fallback.
+- Implemented tag normalization rules (Chinese/ASCII alnum, length <= 10).
+- Added pending-file handling so new empty `.txt` entries appear after save.
+- Added Tauri commands for quick `.txt` creation and batch tag updates.
+- Added UI support for Ctrl multi-select, right-click tag add/remove, and tag suggestions.
+- Added a quick-create `+` button next to settings in the search bar.
+- Added FD and TDD documents for tags + quick-create.
+- Updated the PRD with tag management and quick-create requirements.
+
 ## 2026-01-15
 
 - Scaffolded Tauri v2 + SvelteKit project in `prompt-launcher`.

@@ -1,11 +1,12 @@
 mod autostart;
 mod config;
 mod prompts;
+mod tags_meta;
 mod win;
 
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use serde::Serialize;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, RwLock};
@@ -20,13 +21,15 @@ use tauri::{
 use tauri::Emitter;
 
 use config::{load_or_init, save, AppConfig};
-use prompts::{index_prompts, search_prompts as search_prompts_impl, PromptEntry};
+use prompts::{index_prompts, search_prompts as search_prompts_impl, PromptEntry, normalize_tag};
+use tags_meta::{load_tags_meta, path_to_key, save_tags_meta, touch_updated_at};
 
 struct AppState {
     prompts: RwLock<Vec<PromptEntry>>,
     config: Mutex<AppConfig>,
     watcher: Mutex<Option<RecommendedWatcher>>,
     last_active_hwnd: Mutex<Option<isize>>,
+    pending_paths: Mutex<HashSet<String>>,
 }
 
 #[derive(Serialize)]
@@ -42,6 +45,7 @@ impl AppState {
             config: Mutex::new(config),
             watcher: Mutex::new(None),
             last_active_hwnd: Mutex::new(None),
+            pending_paths: Mutex::new(HashSet::new()),
         }
     }
 }
@@ -92,9 +96,116 @@ fn set_prompts_dir(
         save(&app, &config)?;
     }
 
+    {
+        let mut pending = state.pending_paths.lock().unwrap();
+        pending.clear();
+    }
+
     let prompts = refresh_prompts(state.inner(), &dir);
     start_watcher(app, state.inner().clone(), dir)?;
     Ok(prompts)
+}
+
+#[tauri::command]
+fn create_prompt_file(
+    state: State<Arc<AppState>>,
+    name: String,
+) -> Result<String, String> {
+    let trimmed = name.trim();
+    if trimmed.is_empty() {
+        return Err("文件名不能为空".to_string());
+    }
+    if !is_valid_filename(trimmed) {
+        return Err("文件名包含非法字符".to_string());
+    }
+    let file_name = if trimmed.to_ascii_lowercase().ends_with(".txt") {
+        trimmed.to_string()
+    } else {
+        format!("{trimmed}.txt")
+    };
+    if !is_valid_filename(&file_name) {
+        return Err("文件名包含非法字符".to_string());
+    }
+    let dir = {
+        let config = state.config.lock().unwrap();
+        config.prompts_dir.clone()
+    };
+    if dir.trim().is_empty() {
+        return Err("提示词目录未配置".to_string());
+    }
+    fs::create_dir_all(&dir).map_err(|e| format!("create prompts dir failed: {e}"))?;
+    let path = PathBuf::from(dir).join(&file_name);
+    if path.exists() {
+        return Err("文件已存在，无法创建".to_string());
+    }
+    fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&path)
+        .map_err(|e| format!("create file failed: {e}"))?;
+    let path_string = path.to_string_lossy().to_string();
+    state
+        .pending_paths
+        .lock()
+        .unwrap()
+        .insert(path_string.clone());
+    Ok(path_string)
+}
+
+#[tauri::command]
+fn update_prompt_tags(
+    state: State<Arc<AppState>>,
+    paths: Vec<String>,
+    add: Vec<String>,
+    remove: Vec<String>,
+) -> Result<Vec<PromptEntry>, String> {
+    if paths.is_empty() {
+        return Err("未选择任何提示词".to_string());
+    }
+    let add_tags = normalize_input_tags(add)?;
+    let remove_tags = normalize_input_tags(remove)?;
+    if add_tags.is_empty() && remove_tags.is_empty() {
+        return Err("标签不能为空".to_string());
+    }
+    let dir = {
+        let config = state.config.lock().unwrap();
+        config.prompts_dir.clone()
+    };
+    if dir.trim().is_empty() {
+        return Err("提示词目录未配置".to_string());
+    }
+    let root = PathBuf::from(&dir);
+    let mut meta = load_tags_meta(&root)?;
+    let prompt_map = build_prompt_tag_map(state.inner());
+
+    for raw_path in paths {
+        let path = PathBuf::from(&raw_path);
+        let key = path_to_key(&root, &path);
+        let base_tags = if let Some(existing) = meta.tags_by_path.get(&key) {
+            existing.clone()
+        } else {
+            prompt_map.get(&raw_path).cloned().unwrap_or_default()
+        };
+        let mut next = HashSet::new();
+        for tag in base_tags {
+            if let Some(normalized) = normalize_tag(&tag) {
+                next.insert(normalized);
+            }
+        }
+        for tag in &add_tags {
+            next.insert(tag.clone());
+        }
+        for tag in &remove_tags {
+            next.remove(tag);
+        }
+        let mut next_vec: Vec<String> = next.into_iter().collect();
+        next_vec.sort();
+        meta.tags_by_path.insert(key, next_vec);
+    }
+
+    touch_updated_at(&mut meta);
+    save_tags_meta(&root, &meta)?;
+    Ok(refresh_prompts(state.inner(), &root))
 }
 
 #[tauri::command]
@@ -263,9 +374,74 @@ fn focus_last_window(
 
 fn refresh_prompts(state: &Arc<AppState>, dir: &Path) -> Vec<PromptEntry> {
     let prompts = index_prompts(dir);
+    let pending = { state.pending_paths.lock().unwrap().clone() };
+    let mut next_pending = HashSet::new();
+    let mut visible = Vec::new();
+
+    for prompt in prompts {
+        if pending.contains(&prompt.id) {
+            let size = fs::metadata(&prompt.path).map(|m| m.len()).unwrap_or(0);
+            if size == 0 {
+                next_pending.insert(prompt.id.clone());
+                continue;
+            }
+        }
+        visible.push(prompt);
+    }
+
+    if !pending.is_empty() {
+        *state.pending_paths.lock().unwrap() = next_pending;
+    }
+
     let mut lock = state.prompts.write().unwrap();
-    *lock = prompts.clone();
-    prompts
+    *lock = visible.clone();
+    visible
+}
+
+fn build_prompt_tag_map(state: &Arc<AppState>) -> HashMap<String, Vec<String>> {
+    let prompts = state.prompts.read().unwrap();
+    let mut map = HashMap::new();
+    for prompt in prompts.iter() {
+        map.insert(prompt.id.clone(), prompt.tags.clone());
+    }
+    map
+}
+
+fn normalize_input_tags(raw: Vec<String>) -> Result<Vec<String>, String> {
+    let mut tags = Vec::new();
+    let mut seen = HashSet::new();
+    for value in raw {
+        for token in value.split_whitespace() {
+            let token = token.trim_start_matches('#');
+            if token.is_empty() {
+                continue;
+            }
+            let normalized = normalize_tag(token)
+                .ok_or_else(|| "标签仅允许中英文数字，长度 1-10".to_string())?;
+            if seen.insert(normalized.clone()) {
+                tags.push(normalized);
+            }
+        }
+    }
+    Ok(tags)
+}
+
+fn is_valid_filename(name: &str) -> bool {
+    let trimmed = name.trim();
+    if trimmed.is_empty() {
+        return false;
+    }
+    if trimmed.ends_with('.') || trimmed.ends_with(' ') {
+        return false;
+    }
+    if trimmed == "." || trimmed == ".." {
+        return false;
+    }
+    let invalid = ['<', '>', ':', '"', '/', '\\', '|', '?', '*'];
+    if trimmed.chars().any(|ch| invalid.contains(&ch)) {
+        return false;
+    }
+    true
 }
 
 fn store_active_window(state: &Arc<AppState>) -> Result<(), String> {
@@ -412,11 +588,7 @@ fn start_watcher(
             if res.is_err() {
                 return;
             }
-            let prompts = index_prompts(&index_dir);
-            {
-                let mut lock = state_handle.prompts.write().unwrap();
-                *lock = prompts.clone();
-            }
+            let prompts = refresh_prompts(&state_handle, &index_dir);
             let _ = app_handle.emit("prompts-updated", prompts);
         },
     )
@@ -474,12 +646,14 @@ pub fn run() {
             list_prompts,
             search_prompts,
             set_prompts_dir,
+            create_prompt_file,
             set_auto_paste,
             set_hotkey,
             set_auto_start,
             toggle_favorite,
             push_recent,
             set_recent_enabled,
+            update_prompt_tags,
             set_top_tags_scope,
             set_top_tags_limit,
             set_show_shortcuts_hint,
