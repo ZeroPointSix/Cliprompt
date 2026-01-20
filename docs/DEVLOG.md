@@ -19,6 +19,7 @@
 - Fixed Svelte a11y warnings by switching result items to buttons and using pointerdown on overlays.
 - Ran `npm run dev`; frontend compiled without a11y warnings.
 - Ran `cargo test`; all tests passed (9 unit tests).
+- Ran `npm run tauri dev`; app started successfully and was stopped after verification.
 
 ## 2026-01-15
 
