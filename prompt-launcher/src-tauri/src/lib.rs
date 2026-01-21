@@ -182,26 +182,28 @@ fn open_prompt_path(
     let root = resolve_prompts_root(state.inner())?;
     let target = resolve_prompt_path(&root, Path::new(&path))?;
     let target_str = target.to_string_lossy().to_string();
-    if let Err(error) = app.opener().open_path(target_str.clone(), None::<&str>) {
-        #[cfg(target_os = "windows")]
-        {
-            let mut errors = vec![format!("{error}")];
-            if let Err(err) = app.opener().open_path(target_str.clone(), Some("notepad")) {
-                errors.push(format!("{err}"));
-            } else {
-                return Ok(());
+    #[cfg(target_os = "windows")]
+    {
+        let mut errors = Vec::new();
+        let candidates = ["code", "code.cmd", "notepad", "notepad.exe"];
+        for editor in candidates {
+            match app.opener().open_path(target_str.clone(), Some(editor)) {
+                Ok(_) => return Ok(()),
+                Err(err) => errors.push(format!("{editor}: {err}")),
             }
-            if let Err(err) = app.opener().open_path(target_str.clone(), Some("notepad.exe")) {
-                errors.push(format!("{err}"));
-            } else {
-                return Ok(());
-            }
+        }
+        if let Err(err) = app.opener().open_path(target_str.clone(), None::<&str>) {
+            errors.push(format!("default: {err}"));
             return Err(format!("打开失败：{}", errors.join(" | ")));
         }
-        #[allow(unreachable_code)]
-        Err(format!("打开失败：{error}"))
-    } else {
-        Ok(())
+        return Ok(());
+    }
+
+    #[allow(unreachable_code)]
+    {
+        app.opener()
+            .open_path(target_str.clone(), None::<&str>)
+            .map_err(|error| format!("打开失败：{error}"))
     }
 }
 

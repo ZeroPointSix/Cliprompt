@@ -1368,8 +1368,9 @@
             <button
                 class="context-item"
                 onclick={() => {
+                  const target = contextTarget;
                   closeContextMenu();
-                  openPrompt(contextTarget);
+                  void openPrompt(target);
                 }}
             >打开文件</button>
         </div>
