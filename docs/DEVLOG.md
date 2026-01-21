@@ -1,5 +1,14 @@
 # Dev Log
 
+## 2026-01-21
+
+- 新增功能: 增加预览长度配置（10-200，默认 50）并在设置页提供输入框。
+- 新增功能: 调整预览长度后立即重算并更新列表中的预览内容。
+- 修复: 预览截断改为按字符计数，避免多字节字符截断风险。
+- 重要变更: 新增 `config.json` 字段 `preview_chars`，旧配置自动补默认值。
+- 测试/验证: `cargo test`（11 tests）。
+- 构建: `npm run tauri build`，生成 MSI/NSIS 安装包。
+
 ## 2026-01-20
 
 - Fixed quick-create flow so the system editor is visible by hiding the launcher after opening the new file.

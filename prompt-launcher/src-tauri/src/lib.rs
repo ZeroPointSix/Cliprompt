@@ -25,8 +25,13 @@ use tauri::Emitter;
 use tauri_plugin_opener::OpenerExt;
 
 use config::{load_or_init, save, AppConfig};
-use prompts::{index_prompts, search_prompts as search_prompts_impl, PromptEntry, normalize_tag};
+use prompts::{
+    index_prompts, make_preview, normalize_tag, search_prompts as search_prompts_impl, PromptEntry,
+};
 use tags_meta::{load_tags_meta, path_to_key, save_tags_meta, touch_updated_at};
+
+const PREVIEW_CHARS_MIN: u32 = 10;
+const PREVIEW_CHARS_MAX: u32 = 200;
 
 struct AppState {
     prompts: RwLock<Vec<PromptEntry>>,
@@ -439,6 +444,26 @@ fn set_top_tags_limit(
 }
 
 #[tauri::command]
+fn set_preview_chars(
+    app: AppHandle,
+    state: State<Arc<AppState>>,
+    preview_chars: u32,
+) -> Result<(), String> {
+    let value = preview_chars.clamp(PREVIEW_CHARS_MIN, PREVIEW_CHARS_MAX);
+    {
+        let mut config = state.config.lock().unwrap();
+        config.preview_chars = value;
+        save(&app, &config)?;
+    }
+    let preview_chars = value as usize;
+    let mut prompts = state.prompts.write().unwrap();
+    for prompt in prompts.iter_mut() {
+        prompt.preview = make_preview(&prompt.body, preview_chars);
+    }
+    Ok(())
+}
+
+#[tauri::command]
 fn set_show_shortcuts_hint(
     app: AppHandle,
     state: State<Arc<AppState>>,
@@ -500,7 +525,13 @@ fn focus_last_window(
 }
 
 fn refresh_prompts(state: &Arc<AppState>, dir: &Path) -> Vec<PromptEntry> {
-    let prompts = index_prompts(dir);
+    let preview_chars = {
+        let config = state.config.lock().unwrap();
+        config
+            .preview_chars
+            .clamp(PREVIEW_CHARS_MIN, PREVIEW_CHARS_MAX) as usize
+    };
+    let prompts = index_prompts(dir, preview_chars);
     let pending = { state.pending_paths.lock().unwrap().clone() };
     let mut next_pending = HashSet::new();
     let mut visible = Vec::new();
@@ -675,11 +706,11 @@ fn init_tray(app: &tauri::App) -> Result<(), String> {
     Ok(())
 }
 
-fn seed_prompts_if_empty(dir: &Path) -> Result<(), String> {
+fn seed_prompts_if_empty(dir: &Path, preview_chars: usize) -> Result<(), String> {
     if !dir.exists() {
         return Ok(());
     }
-    if !index_prompts(dir).is_empty() {
+    if !index_prompts(dir, preview_chars).is_empty() {
         return Ok(());
     }
 
@@ -747,11 +778,13 @@ pub fn run() {
             let handle = app.handle();
             let config = load_or_init(handle)
                 .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+            let preview_chars =
+                config.preview_chars.clamp(PREVIEW_CHARS_MIN, PREVIEW_CHARS_MAX) as usize;
 
             let dir = PathBuf::from(&config.prompts_dir);
             fs::create_dir_all(&dir)
                 .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
-            seed_prompts_if_empty(&dir)
+            seed_prompts_if_empty(&dir, preview_chars)
                 .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
 
             #[cfg(target_os = "windows")]
@@ -762,7 +795,7 @@ pub fn run() {
             }
 
             let state = Arc::new(AppState::new(config));
-            let prompts = index_prompts(&dir);
+            let prompts = index_prompts(&dir, preview_chars);
             {
                 let mut lock = state.prompts.write().unwrap();
                 *lock = prompts;
@@ -796,6 +829,7 @@ pub fn run() {
             update_prompt_tags,
             set_top_tags_scope,
             set_top_tags_limit,
+            set_preview_chars,
             set_show_shortcuts_hint,
             clear_recent,
             capture_active_window,

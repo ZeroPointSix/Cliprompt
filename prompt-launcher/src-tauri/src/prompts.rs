@@ -53,7 +53,7 @@ pub fn search_prompts(
         .collect()
 }
 
-pub fn index_prompts(dir: &Path) -> Vec<PromptEntry> {
+pub fn index_prompts(dir: &Path, preview_chars: usize) -> Vec<PromptEntry> {
     let meta = match load_tags_meta(dir) {
         Ok(meta) => meta,
         Err(err) => {
@@ -70,14 +70,19 @@ pub fn index_prompts(dir: &Path) -> Vec<PromptEntry> {
         if !is_prompt_file(path) {
             continue;
         }
-        if let Some(prompt) = read_prompt(path, dir, &meta) {
+        if let Some(prompt) = read_prompt(path, dir, &meta, preview_chars) {
             entries.push(prompt);
         }
     }
     entries
 }
 
-fn read_prompt(path: &Path, root: &Path, meta: &TagsMeta) -> Option<PromptEntry> {
+fn read_prompt(
+    path: &Path,
+    root: &Path,
+    meta: &TagsMeta,
+    preview_chars: usize,
+) -> Option<PromptEntry> {
     let body = fs::read_to_string(path).ok()?;
     let title = path
         .file_stem()
@@ -92,7 +97,7 @@ fn read_prompt(path: &Path, root: &Path, meta: &TagsMeta) -> Option<PromptEntry>
     let resolved = resolve_tags_for_path(meta, root, path, fallback);
     let mut tags = normalize_tags(resolved);
     tags.sort();
-    let preview = make_preview(&body);
+    let preview = make_preview(&body, preview_chars);
     let path_string = path.to_string_lossy().to_string();
 
     Some(PromptEntry {
@@ -112,15 +117,41 @@ fn is_prompt_file(path: &Path) -> bool {
     }
 }
 
-fn make_preview(body: &str) -> String {
-    let first_line = body
-        .lines()
-        .find(|line| !line.trim().is_empty())
-        .unwrap_or("")
-        .trim();
-    let mut preview = first_line.replace('\t', " ");
-    if preview.len() > 120 {
-        preview.truncate(120);
+pub(crate) fn make_preview(body: &str, max_chars: usize) -> String {
+    if max_chars == 0 {
+        return String::new();
+    }
+    let mut preview = String::new();
+    let mut count = 0usize;
+    let mut truncated = false;
+
+    for token in body.split_whitespace() {
+        if count >= max_chars {
+            truncated = true;
+            break;
+        }
+        if !preview.is_empty() {
+            if count + 1 > max_chars {
+                truncated = true;
+                break;
+            }
+            preview.push(' ');
+            count += 1;
+        }
+        for ch in token.chars() {
+            if count >= max_chars {
+                truncated = true;
+                break;
+            }
+            preview.push(ch);
+            count += 1;
+        }
+        if truncated {
+            break;
+        }
+    }
+
+    if truncated {
         preview.push_str("...");
     }
     preview
@@ -353,7 +384,7 @@ mod tests {
         let path = dir.join("示例 #a #b.txt");
         fs::write(&path, "content").unwrap();
         let meta = TagsMeta::default();
-        let prompt = read_prompt(&path, &dir, &meta).expect("read prompt");
+        let prompt = read_prompt(&path, &dir, &meta, 50).expect("read prompt");
 
         assert!(tags_match(&prompt, &["a".to_string()]));
         assert!(tags_match(&prompt, &["a".to_string(), "b".to_string()]));

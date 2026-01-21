@@ -25,6 +25,8 @@ pub struct AppConfig {
     pub top_tags_limit: u32,
     #[serde(default = "default_show_shortcuts_hint")]
     pub show_shortcuts_hint: bool,
+    #[serde(default = "default_preview_chars")]
+    pub preview_chars: u32,
 }
 
 impl Default for AppConfig {
@@ -41,6 +43,7 @@ impl Default for AppConfig {
             top_tags_use_results: false,
             top_tags_limit: default_top_tags_limit(),
             show_shortcuts_hint: default_show_shortcuts_hint(),
+            preview_chars: default_preview_chars(),
         }
     }
 }
@@ -51,6 +54,10 @@ fn default_top_tags_limit() -> u32 {
 
 fn default_show_shortcuts_hint() -> bool {
     true
+}
+
+fn default_preview_chars() -> u32 {
+    50
 }
 
 pub fn load_or_init(app: &AppHandle) -> Result<AppConfig, String> {

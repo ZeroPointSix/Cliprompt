@@ -28,6 +28,7 @@
     top_tags_use_results: boolean;
     top_tags_limit: number;
     show_shortcuts_hint: boolean;
+    preview_chars: number;
   };
 
   type RecentState = {
@@ -51,7 +52,8 @@
     recent_meta: {},
     top_tags_use_results: false,
     top_tags_limit: 8,
-    show_shortcuts_hint: true
+    show_shortcuts_hint: true,
+    preview_chars: 50
   });
   let selectedIndex = $state<number>(0);
   let status = $state<string>("");
@@ -867,6 +869,36 @@
     await invoke("set_top_tags_limit", { limit: value });
   }
 
+  async function setPreviewChars(previewChars: number) {
+    const value = Math.max(10, Math.min(200, Math.floor(previewChars)));
+    if (value === config.preview_chars) {
+      return;
+    }
+    config = { ...config, preview_chars: value };
+    await invoke("set_preview_chars", { previewChars: value });
+    await refreshResults();
+  }
+
+  function onPreviewCharsChange(event: Event) {
+    const target = event.target as HTMLInputElement | null;
+    if (!target) {
+      return;
+    }
+    const raw = Number(target.value);
+    if (!Number.isFinite(raw)) {
+      target.value = String(config.preview_chars);
+      return;
+    }
+    const value = Math.max(10, Math.min(200, Math.floor(raw)));
+    if (target.value !== String(value)) {
+      target.value = String(value);
+    }
+    if (value === config.preview_chars) {
+      return;
+    }
+    void setPreviewChars(value);
+  }
+
   async function applyTopTagsScopeForFilter() {
     if (topTagsScopeBeforeFilter === null) {
       topTagsScopeBeforeFilter = config.top_tags_use_results;
@@ -1350,6 +1382,20 @@
                                     <input type="checkbox" checked={config.auto_start} onchange={toggleAutoStart} />
                                     <span class="slider"></span>
                                 </label>
+                             </div>
+                             <div class="setting-item">
+                                <span class="label">预览长度(字)</span>
+                                <div class="controls">
+                                    <input
+                                        class="input-sm"
+                                        type="number"
+                                        min="10"
+                                        max="200"
+                                        step="1"
+                                        value={config.preview_chars}
+                                        onchange={onPreviewCharsChange}
+                                    />
+                                </div>
                              </div>
                         </div>
                     </div>
