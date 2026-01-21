@@ -75,6 +75,8 @@
   let removeTagOptions = $state<string[]>([]);
   let removeTagSelection = $state<Set<string>>(new Set());
   let tagSuggestions = $state<string[]>([]);
+  let isComposing = false;
+  let compositionEndedAt = 0;
 
   let filtered = $state<PromptEntry[]>([]);
   let allPrompts = $state<PromptEntry[]>([]);
@@ -600,6 +602,34 @@
     }
   }
 
+  async function deleteSelectedPrompts() {
+    const selected = getSelectedPrompts();
+    if (selected.length === 0) {
+      status = "请选择项目";
+      return;
+    }
+    const confirmMessage =
+      selected.length === 1
+        ? `确定删除 "${selected[0].title}" 吗？此操作不可撤销。`
+        : `确定删除 ${selected.length} 个文件吗？此操作不可撤销。`;
+    if (!window.confirm(confirmMessage)) {
+      return;
+    }
+    const paths = selected.map((prompt) => prompt.path);
+    try {
+      const updated = await invoke<PromptEntry[]>("delete_prompt_files", { paths });
+      allPrompts = updated ?? [];
+      config = await invoke<AppConfig>("get_config");
+      selectedIds = new Set();
+      selectedIndex = 0;
+      status = "删除成功";
+    } catch (error) {
+      status = `删除失败：${formatError(error)}`;
+    } finally {
+      await refreshResults();
+    }
+  }
+
   function getSelectedPrompts() {
     if (selectedIds.size === 0) {
       return [];
@@ -643,11 +673,22 @@
     if (!selectedIds.has(prompt.id)) {
       setSingleSelection(prompt);
     }
+    // Keep context menu within window bounds so all items remain visible.
+    const menuItemCount = 4;
+    const menuItemHeight = 40;
+    const menuPadding = 12;
+    const menuWidth = 160;
+    const menuHeight = menuPadding + menuItemCount * menuItemHeight;
+    const padding = 8;
+    const maxX = Math.max(padding, window.innerWidth - menuWidth - padding);
+    const maxY = Math.max(padding, window.innerHeight - menuHeight - padding);
+    const x = Math.min(Math.max(padding, event.clientX), maxX);
+    const y = Math.min(Math.max(padding, event.clientY), maxY);
     contextTarget = prompt;
     contextMenu = {
       visible: true,
-      x: event.clientX,
-      y: event.clientY
+      x,
+      y
     };
   }
 
@@ -1083,6 +1124,15 @@
   }
 
   function onSearchKeydown(event: KeyboardEvent) {
+    if (event.isComposing || isComposing) {
+      return;
+    }
+    if (event.key === "Process" || event.keyCode === 229) {
+      return;
+    }
+    if (event.key === "Enter" && Date.now() - compositionEndedAt < 120) {
+      return;
+    }
     if (event.key === "Escape" && contextMenu.visible) {
       event.preventDefault();
       closeContextMenu();
@@ -1235,6 +1285,13 @@
             value={query}
             oninput={onSearchInput}
             onkeydown={onSearchKeydown}
+            oncompositionstart={() => {
+              isComposing = true;
+            }}
+            oncompositionend={() => {
+              isComposing = false;
+              compositionEndedAt = Date.now();
+            }}
         />
         <button class="add-btn" onclick={createQuickPrompt} title="新建短语">
              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1373,6 +1430,13 @@
                   void openPrompt(target);
                 }}
             >打开文件</button>
+            <button
+                class="context-item"
+                onclick={() => {
+                  closeContextMenu();
+                  void deleteSelectedPrompts();
+                }}
+            >删除文件</button>
         </div>
     {/if}
 

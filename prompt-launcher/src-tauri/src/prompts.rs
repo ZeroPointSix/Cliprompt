@@ -290,23 +290,7 @@ fn score_match(text: &str, term: &str) -> Option<i32> {
 }
 
 fn best_substring_index(text: &str, term: &str) -> Option<usize> {
-    let mut best: Option<usize> = None;
-    let mut start = 0usize;
-    while let Some(pos) = text[start..].find(term) {
-        let idx = start + pos;
-        best = Some(match best {
-            Some(current) => {
-                if idx < current {
-                    idx
-                } else {
-                    current
-                }
-            }
-            None => idx,
-        });
-        start = idx + 1;
-    }
-    best
+    text.find(term)
 }
 
 fn is_word_boundary(text: &str, index: usize) -> bool {
@@ -374,5 +358,15 @@ mod tests {
         assert!(tags_match(&prompt, &["a".to_string()]));
         assert!(tags_match(&prompt, &["a".to_string(), "b".to_string()]));
         assert!(!tags_match(&prompt, &["a".to_string(), "c".to_string()]));
+    }
+
+    #[test]
+    fn best_substring_index_handles_multibyte() {
+        assert_eq!(best_substring_index("中文测试", "文"), Some(3));
+    }
+
+    #[test]
+    fn score_match_handles_chinese() {
+        assert!(score_match("中文测试", "测").is_some());
     }
 }

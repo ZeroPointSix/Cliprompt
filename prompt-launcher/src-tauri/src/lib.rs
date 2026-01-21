@@ -208,6 +208,59 @@ fn open_prompt_path(
 }
 
 #[tauri::command]
+fn delete_prompt_files(
+    app: AppHandle,
+    state: State<Arc<AppState>>,
+    paths: Vec<String>,
+) -> Result<Vec<PromptEntry>, String> {
+    if paths.is_empty() {
+        return Err("未选择任何提示词".to_string());
+    }
+    let root = resolve_prompts_root(state.inner())?;
+    let mut remove_ids = HashSet::new();
+    let mut remove_keys = Vec::new();
+
+    for raw_path in &paths {
+        let target = resolve_prompt_path(&root, Path::new(raw_path))?;
+        let target_str = target.to_string_lossy().to_string();
+        if target.exists() {
+            fs::remove_file(&target).map_err(|e| format!("删除失败: {e}"))?;
+        }
+        remove_ids.insert(raw_path.clone());
+        remove_ids.insert(target_str.clone());
+        remove_keys.push(path_to_key(&root, &target));
+    }
+
+    {
+        let mut pending = state.pending_paths.lock().unwrap();
+        pending.retain(|item| !remove_ids.contains(item));
+    }
+
+    {
+        let mut config = state.config.lock().unwrap();
+        config.favorites.retain(|item| !remove_ids.contains(item));
+        config.recent_ids.retain(|item| !remove_ids.contains(item));
+        config.recent_meta.retain(|key, _| !remove_ids.contains(key));
+        save(&app, &config)?;
+    }
+
+    if let Ok(mut meta) = load_tags_meta(&root) {
+        let mut changed = false;
+        for key in remove_keys {
+            if meta.tags_by_path.remove(&key).is_some() {
+                changed = true;
+            }
+        }
+        if changed {
+            touch_updated_at(&mut meta);
+            let _ = save_tags_meta(&root, &meta);
+        }
+    }
+
+    Ok(refresh_prompts(state.inner(), &root))
+}
+
+#[tauri::command]
 fn update_prompt_tags(
     state: State<Arc<AppState>>,
     paths: Vec<String>,
@@ -703,6 +756,7 @@ pub fn run() {
             set_prompts_dir,
             create_prompt_file,
             open_prompt_path,
+            delete_prompt_files,
             set_auto_paste,
             set_hotkey,
             set_auto_start,
