@@ -1,7 +1,10 @@
-mod autostart;
 mod config;
 mod prompts;
 mod tags_meta;
+
+#[cfg(target_os = "windows")]
+mod autostart;
+#[cfg(target_os = "windows")]
 mod win;
 
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
@@ -344,10 +347,12 @@ fn set_auto_start(
     state: State<Arc<AppState>>,
     auto_start: bool,
 ) -> Result<(), String> {
-    let exe_path = std::env::current_exe()
-        .map_err(|e| format!("resolve exe path failed: {e}"))?;
-
-    autostart::set_auto_start(auto_start, &exe_path)?;
+    #[cfg(target_os = "windows")]
+    {
+        let exe_path = std::env::current_exe()
+            .map_err(|e| format!("resolve exe path failed: {e}"))?;
+        autostart::set_auto_start(auto_start, &exe_path)?;
+    }
 
     let mut config = state.config.lock().unwrap();
     config.auto_start = auto_start;
@@ -461,7 +466,14 @@ fn clear_recent(
 
 #[tauri::command]
 fn capture_active_window(state: State<Arc<AppState>>) -> Result<(), String> {
-    store_active_window(state.inner())
+    #[cfg(target_os = "windows")]
+    {
+        store_active_window(state.inner())
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        Ok(())
+    }
 }
 
 #[tauri::command]
@@ -469,15 +481,22 @@ fn focus_last_window(
     state: State<Arc<AppState>>,
     auto_paste: bool,
 ) -> Result<(), String> {
-    let hwnd = *state.last_active_hwnd.lock().unwrap();
-    if let Some(hwnd) = hwnd {
-        win::focus_window(hwnd)?;
-        if auto_paste {
-            thread::sleep(Duration::from_millis(30));
-            win::send_ctrl_v()?;
+    #[cfg(target_os = "windows")]
+    {
+        let hwnd = *state.last_active_hwnd.lock().unwrap();
+        if let Some(hwnd) = hwnd {
+            win::focus_window(hwnd)?;
+            if auto_paste {
+                thread::sleep(Duration::from_millis(30));
+                win::send_ctrl_v()?;
+            }
         }
+        Ok(())
     }
-    Ok(())
+    #[cfg(not(target_os = "windows"))]
+    {
+        Ok(())
+    }
 }
 
 fn refresh_prompts(state: &Arc<AppState>, dir: &Path) -> Vec<PromptEntry> {
@@ -553,11 +572,18 @@ fn is_valid_filename(name: &str) -> bool {
 }
 
 fn store_active_window(state: &Arc<AppState>) -> Result<(), String> {
-    if let Some(hwnd) = win::capture_foreground_window() {
-        *state.last_active_hwnd.lock().unwrap() = Some(hwnd);
+    #[cfg(target_os = "windows")]
+    {
+        if let Some(hwnd) = win::capture_foreground_window() {
+            *state.last_active_hwnd.lock().unwrap() = Some(hwnd);
+            Ok(())
+        } else {
+            Err("no active window detected".to_string())
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
         Ok(())
-    } else {
-        Err("no active window detected".to_string())
     }
 }
 
@@ -727,9 +753,13 @@ pub fn run() {
                 .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
             seed_prompts_if_empty(&dir)
                 .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
-            let _ = std::env::current_exe()
-                .map_err(|e| format!("resolve exe path failed: {e}"))
-                .and_then(|exe| autostart::set_auto_start(config.auto_start, &exe));
+
+            #[cfg(target_os = "windows")]
+            {
+                let _ = std::env::current_exe()
+                    .map_err(|e| format!("resolve exe path failed: {e}"))
+                    .and_then(|exe| autostart::set_auto_start(config.auto_start, &exe));
+            }
 
             let state = Arc::new(AppState::new(config));
             let prompts = index_prompts(&dir);
