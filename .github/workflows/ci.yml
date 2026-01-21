@@ -30,7 +30,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y webkit2gtk-4.1 libappindicator3-0.1 libgcc-13-dev libstdc++-13-dev
+          sudo apt-get install -y webkit2gtk-4.1 libgcc-13-dev libstdc++-13-dev libayatana-appindicator3-1
 
       - name: Build frontend
         working-directory: ./prompt-launcher
