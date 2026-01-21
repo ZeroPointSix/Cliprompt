@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches-ignore:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test:
+    name: Test Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: prompt-launcher/package-lock.json
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y webkit2gtk-4.1 libappindicator3-0.1 libgcc-13-dev libstdc++-13-dev
+
+      - name: Build frontend
+        working-directory: ./prompt-launcher
+        run: |
+          npm ci
+          npm run build
+
+      - name: Build Tauri app (check only)
+        working-directory: ./prompt-launcher/src-tauri
+        run: |
+          cargo check --verbose
+        env:
+          CARGO_INCREMENTAL: 0

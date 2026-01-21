@@ -1,0 +1,140 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.gitignore'
+      - 'LICENSE'
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  release:
+    name: Build & Release
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact_prefix: linux
+          - os: windows-latest
+            artifact_prefix: windows
+          - os: macos-latest
+            artifact_prefix: macos
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: prompt-launcher/package-lock.json
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.os == 'windows-latest' && 'x86_64-pc-windows-msvc' || matrix.os == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || 'x86_64-unknown-linux-gnu' }}
+
+      - name: Install dependencies (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y webkit2gtk-4.1 libappindicator3-0.1 libgcc-13-dev libstdc++-13-dev
+
+      - name: Install dependencies (Windows)
+        if: matrix.os == 'windows-latest'
+        uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: webkit2gtk-4.0
+          version: 1.0
+
+      - name: Build frontend
+        working-directory: ./prompt-launcher
+        run: |
+          npm ci
+          npm run build
+
+      - name: Build Tauri app
+        working-directory: ./prompt-launcher/src-tauri
+        run: |
+          cargo tauri build --verbose --bundles deb,bundle,msi
+        env:
+          CARGO_INCREMENTAL: 0
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_prefix }}-bundle
+          path: |
+            prompt-launcher/src-tauri/target/release/bundle/**
+          retention-days: 1
+
+  create-release:
+    name: Create Release
+    needs: release
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate changelog
+        id: changelog
+        uses: Boyko-Karadzhov/generate-changelog@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          tag_prefix: 'v'
+          header: '## 发布说明'
+          footer: '完整变更记录请查看 [提交历史](https://github.com/ZeroPointSix/Cliprompt/commits/main)。'
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Cliprompt Release
+          body: ${{ steps.changelog.outputs.changelog }}
+          draft: false
+          prerelease: false
+          files: |
+            artifacts/**/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create Release PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: releases } = await github.rest.repos.listReleases({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 1
+            });
+
+            if (releases.length > 0) {
+              const release = releases[0];
+              await github.rest.repos.createCommitComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                commit_sha: context.sha,
+                body: `🎉 新版本已发布！[查看发布说明](${release.html_url})`
+              });
+            }
