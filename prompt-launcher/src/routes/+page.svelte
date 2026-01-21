@@ -2,6 +2,7 @@
   import { onDestroy, onMount, tick } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
   import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+  import { getVersion } from "@tauri-apps/api/app";
   import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
   import { open as openDialog } from "@tauri-apps/plugin-dialog";
   import { register, unregister } from "@tauri-apps/plugin-global-shortcut";
@@ -41,6 +42,7 @@
 
   let searchInput = $state<HTMLInputElement | null>(null);
   let query = $state<string>("");
+  let appVersion = $state<string>("");
   let config = $state<AppConfig>({
     prompts_dir: "",
     auto_paste: true,
@@ -182,6 +184,11 @@
   onMount(async () => {
     document.title = "提示词启动器";
     config = await invoke<AppConfig>("get_config");
+    try {
+      appVersion = await getVersion();
+    } catch (error) {
+      console.warn("[appVersion] Failed to load version", error);
+    }
     hotkeyDraft = config.hotkey;
     allPrompts = await invoke<PromptEntry[]>("list_prompts");
     if (config.show_shortcuts_hint) {
@@ -1345,7 +1352,7 @@
                 <div class="settings-container">
                     <div class="settings-header-mini">
                         <span>设置</span>
-                        <span class="version">v0.1.0</span>
+                        <span class="version">{appVersion ? `v${appVersion}` : "v--"}</span>
                     </div>
 
                     <div class="settings-scroll-area">
