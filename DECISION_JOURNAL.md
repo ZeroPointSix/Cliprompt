@@ -51,6 +51,13 @@
 ### 2026-01-23 13:55
 - Prepared to save current changes and merge explore/feature-20260122-2146 into local main as requested.
 
+### 2026-01-23 14:13
+- Merged explore/feature-20260122-2146 into local main using `--allow-unrelated-histories`.
+- Installed frontend dependencies in prompt-launcher (npm install).
+- Ran `cargo test` in prompt-launcher/src-tauri (24 tests passed).
+- Built release bundles via `npm run tauri build` (msi and nsis outputs) with existing warnings about missing .svelte-kit/tsconfig.json and unused LogicalSize import.
+- Launched release app via prompt-launcher.exe for manual体验。
+
 ### 2026-01-22 22:12
 - ??: PRD ???????????????? TXT ?????????????????????????????????
 - ??:
