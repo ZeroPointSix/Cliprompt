@@ -3,10 +3,11 @@
   import { invoke } from "@tauri-apps/api/core";
   import { listen, type UnlistenFn } from "@tauri-apps/api/event";
   import { getVersion } from "@tauri-apps/api/app";
-  import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
+  import { getCurrentWindow } from "@tauri-apps/api/window";
   import { open as openDialog } from "@tauri-apps/plugin-dialog";
   import { register, unregister } from "@tauri-apps/plugin-global-shortcut";
   import { writeText } from "@tauri-apps/plugin-clipboard-manager";
+  import { registerHotkeySafely } from "../lib/hotkey-registration.js";
 
   type PromptEntry = {
     id: string;
@@ -257,17 +258,31 @@
   async function registerHotkey(hotkey: string) {
     console.log("[registerHotkey] Attempting to register hotkey:", hotkey);
     hotkeyError = "";
-    if (currentHotkey) {
-      console.log("[registerHotkey] Unregistering previous hotkey:", currentHotkey);
-      await unregister(currentHotkey).catch(() => {});
+    const previousHotkey = currentHotkey;
+    const result = await registerHotkeySafely({
+      currentHotkey,
+      nextHotkey: hotkey,
+      register,
+      unregister,
+      handler: toggleWindow
+    });
+    if (result.error) {
+      console.error("[registerHotkey] Failed to register hotkey:", result.error);
+      hotkeyError = `快捷键注册失败：${formatError(result.error)}`;
+      return;
     }
-    try {
-      await register(hotkey, toggleWindow);
-      currentHotkey = hotkey;
+    currentHotkey = result.currentHotkey;
+    if (result.didUnregister && previousHotkey) {
+      console.log("[registerHotkey] Unregistered previous hotkey:", previousHotkey);
+    } else if (result.unregisterError && previousHotkey) {
+      console.warn(
+        "[registerHotkey] Failed to unregister previous hotkey:",
+        previousHotkey,
+        result.unregisterError
+      );
+    }
+    if (result.didRegister) {
       console.log("[registerHotkey] Successfully registered hotkey:", hotkey);
-    } catch (error) {
-      console.error("[registerHotkey] Failed to register hotkey:", error);
-      hotkeyError = `快捷键注册失败：${error}`;
     }
   }
 
@@ -359,12 +374,14 @@
       return;
     }
     await registerHotkey(hotkeyDraft);
-    if (!hotkeyError) {
-      await invoke("set_hotkey", { hotkey: hotkeyDraft });
-      config = { ...config, hotkey: hotkeyDraft };
-      status = "快捷键已保存";
-      settingsError = "";
+    if (hotkeyError) {
+      status = hotkeyError;
+      return;
     }
+    await invoke("set_hotkey", { hotkey: hotkeyDraft });
+    config = { ...config, hotkey: hotkeyDraft };
+    status = "快捷键已保存";
+    settingsError = "";
   }
 
   function onHotkeyInputKeydown(event: KeyboardEvent) {
@@ -1367,9 +1384,14 @@
                             </div>
                             <div class="setting-item">
                                 <span class="label">快捷键</span>
-                                <div class="controls">
-                                    <input class="input-sm" bind:value={hotkeyDraft} onkeydown={onHotkeyInputKeydown} placeholder="按下组合键..." />
-                                    <button class="btn-sm" onclick={applyHotkey}>应用</button>
+                                <div class="controls controls-stack">
+                                    <div class="controls-row">
+                                        <input class="input-sm" bind:value={hotkeyDraft} onkeydown={onHotkeyInputKeydown} placeholder="按下组合键..." />
+                                        <button class="btn-sm" onclick={applyHotkey}>应用</button>
+                                    </div>
+                                    {#if hotkeyError}
+                                        <div class="setting-error">{hotkeyError}</div>
+                                    {/if}
                                 </div>
                             </div>
                         </div>
@@ -1963,6 +1985,25 @@
     display: flex;
     gap: 8px;
     align-items: center;
+}
+
+.controls.controls-stack {
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+}
+
+.controls-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.setting-error {
+    font-size: 11px;
+    color: #b91c1c;
+    text-align: right;
+    max-width: 220px;
 }
 
 .path-display {

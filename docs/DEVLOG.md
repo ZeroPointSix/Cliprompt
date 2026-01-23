@@ -1,5 +1,22 @@
 # Dev Log
 
+## 2026-01-22
+
+- Updated hotkey registration to keep the previous hotkey on failure by registering the new hotkey before releasing the old one.
+- Surfaced hotkey registration errors inline in the settings panel for conflict visibility.
+- Extracted hotkey registration flow into `src/lib/hotkey-registration.js`.
+- Added Node tests to cover safe hotkey registration ordering, failure behavior, and unregister errors.
+- Logged unregister failures for previous hotkeys to improve troubleshooting.
+- Dependencies: `npm install` (added 121 packages).
+- Build: `npm run build` (warned about missing `.svelte-kit/tsconfig.json` and unused `LogicalSize` import).
+- Tests: `node --test` (pass, 4 tests).
+
+## 2026-01-23
+
+- Build: `npm run build` (warned about unused `LogicalSize` import).
+- Tests: `node --test` (pass, 4 tests).
+- Dev: `npm run tauri dev` (Vite ready at http://localhost:1420/).
+
 ## 2026-01-21
 
 - 新增功能: 增加预览长度配置（10-200，默认 50）并在设置页提供输入框。
@@ -110,3 +127,10 @@
 - Prevented tray right-click from toggling the window.
 - Set tray menu labels to Chinese and updated the window title on launch.
 - Auto-shown the main window on startup in debug builds for verification.
+- Merged origin/main into feature1 with unrelated histories (added LICENSE).
+- Rebuilt the app with `npm run build` (warning: unused LogicalSize import).
+- Ran unit tests with `node --test` (4 tests passed).
+- Merged local main into feature1 (already up to date).
+- Removed unused LogicalSize import to clean build output.
+- Rebuilt the app with `npm run build` (no warnings).
+- Ran unit tests with `node --test` (4 tests passed).
