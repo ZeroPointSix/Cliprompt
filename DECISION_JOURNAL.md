@@ -62,6 +62,11 @@
 - Build failed once due to prompt-launcher.exe being in use (os error 5); terminated running process and rebuilt successfully.
 - Rebuilt release bundles via `npm run tauri build` and relaunched prompt-launcher.exe for manual测试。
 
+### 2026-01-23 14:29
+- Merged local main into master (no conflicts).
+- Ran `cargo test` in prompt-launcher/src-tauri (24 tests passed).
+- Built release bundles via `npm run tauri build` on master (msi + nsis outputs).
+
 ### 2026-01-22 22:12
 - ??: PRD ???????????????? TXT ?????????????????????????????????
 - ??:
