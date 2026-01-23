@@ -1,6 +1,9 @@
 mod config;
+mod domain;
+mod infrastructure;
 mod prompts;
 mod tags_meta;
+mod usecase;
 
 #[cfg(target_os = "windows")]
 mod autostart;
@@ -25,20 +28,24 @@ use tauri::Emitter;
 use tauri_plugin_opener::OpenerExt;
 
 use config::{load_or_init, save, AppConfig};
+use infrastructure::fs_prompt_file_repository::FsPromptFileRepository;
 use prompts::{
     index_prompts, make_preview, normalize_tag, search_prompts as search_prompts_impl, PromptEntry,
 };
 use tags_meta::{load_tags_meta, path_to_key, save_tags_meta, touch_updated_at};
+use usecase::create_prompt_file::CreatePromptFileUseCase;
 
 const PREVIEW_CHARS_MIN: u32 = 10;
 const PREVIEW_CHARS_MAX: u32 = 200;
+// Grace period to keep newly created empty prompts hidden until editors finish saving.
+const PENDING_PROMPT_TTL_MS: u128 = 5_000;
 
 struct AppState {
     prompts: RwLock<Vec<PromptEntry>>,
     config: Mutex<AppConfig>,
     watcher: Mutex<Option<RecommendedWatcher>>,
     last_active_hwnd: Mutex<Option<isize>>,
-    pending_paths: Mutex<HashSet<String>>,
+    pending_paths: Mutex<HashMap<String, u128>>,
 }
 
 #[derive(Serialize)]
@@ -54,7 +61,7 @@ impl AppState {
             config: Mutex::new(config),
             watcher: Mutex::new(None),
             last_active_hwnd: Mutex::new(None),
-            pending_paths: Mutex::new(HashSet::new()),
+            pending_paths: Mutex::new(HashMap::new()),
         }
     }
 }
@@ -140,21 +147,6 @@ fn create_prompt_file(
     state: State<Arc<AppState>>,
     name: String,
 ) -> Result<String, String> {
-    let trimmed = name.trim();
-    if trimmed.is_empty() {
-        return Err("文件名不能为空".to_string());
-    }
-    if !is_valid_filename(trimmed) {
-        return Err("文件名包含非法字符".to_string());
-    }
-    let file_name = if trimmed.to_ascii_lowercase().ends_with(".txt") {
-        trimmed.to_string()
-    } else {
-        format!("{trimmed}.txt")
-    };
-    if !is_valid_filename(&file_name) {
-        return Err("文件名包含非法字符".to_string());
-    }
     let dir = {
         let config = state.config.lock().unwrap();
         config.prompts_dir.clone()
@@ -162,22 +154,19 @@ fn create_prompt_file(
     if dir.trim().is_empty() {
         return Err("提示词目录未配置".to_string());
     }
-    fs::create_dir_all(&dir).map_err(|e| format!("create prompts dir failed: {e}"))?;
-    let path = PathBuf::from(dir).join(&file_name);
-    if path.exists() {
-        return Err("文件已存在，无法创建".to_string());
-    }
-    fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(&path)
-        .map_err(|e| format!("create file failed: {e}"))?;
+    let root = PathBuf::from(dir);
+    let usecase = CreatePromptFileUseCase::new(FsPromptFileRepository);
+    let path = usecase.execute(&root, &name)?;
     let path_string = path.to_string_lossy().to_string();
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|e| format!("time error: {e}"))?
+        .as_millis();
     state
         .pending_paths
         .lock()
         .unwrap()
-        .insert(path_string.clone());
+        .insert(path_string.clone(), now);
     Ok(path_string)
 }
 
@@ -241,7 +230,7 @@ fn delete_prompt_files(
 
     {
         let mut pending = state.pending_paths.lock().unwrap();
-        pending.retain(|item| !remove_ids.contains(item));
+        pending.retain(|item, _| !remove_ids.contains(item));
     }
 
     {
@@ -533,14 +522,19 @@ fn refresh_prompts(state: &Arc<AppState>, dir: &Path) -> Vec<PromptEntry> {
     };
     let prompts = index_prompts(dir, preview_chars);
     let pending = { state.pending_paths.lock().unwrap().clone() };
-    let mut next_pending = HashSet::new();
+    let mut next_pending = HashMap::new();
     let mut visible = Vec::new();
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|value| value.as_millis())
+        .unwrap_or(0);
 
     for prompt in prompts {
-        if pending.contains(&prompt.id) {
+        if let Some(created_at) = pending.get(&prompt.id) {
             let size = fs::metadata(&prompt.path).map(|m| m.len()).unwrap_or(0);
-            if size == 0 {
-                next_pending.insert(prompt.id.clone());
+            let age = now.saturating_sub(*created_at);
+            if size == 0 && age < PENDING_PROMPT_TTL_MS {
+                next_pending.insert(prompt.id.clone(), *created_at);
                 continue;
             }
         }
@@ -582,24 +576,6 @@ fn normalize_input_tags(raw: Vec<String>) -> Result<Vec<String>, String> {
         }
     }
     Ok(tags)
-}
-
-fn is_valid_filename(name: &str) -> bool {
-    let trimmed = name.trim();
-    if trimmed.is_empty() {
-        return false;
-    }
-    if trimmed.ends_with('.') || trimmed.ends_with(' ') {
-        return false;
-    }
-    if trimmed == "." || trimmed == ".." {
-        return false;
-    }
-    let invalid = ['<', '>', ':', '"', '/', '\\', '|', '?', '*'];
-    if trimmed.chars().any(|ch| invalid.contains(&ch)) {
-        return false;
-    }
-    true
 }
 
 fn store_active_window(state: &Arc<AppState>) -> Result<(), String> {
@@ -765,6 +741,94 @@ fn start_watcher(
 
     *state.watcher.lock().unwrap() = Some(watcher);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn make_temp_dir(prefix: &str) -> std::path::PathBuf {
+        let mut dir = std::env::temp_dir();
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        dir.push(format!("{prefix}-{nanos}"));
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    fn make_state(dir: &Path) -> Arc<AppState> {
+        let mut config = AppConfig::default();
+        config.prompts_dir = dir.to_string_lossy().to_string();
+        Arc::new(AppState::new(config))
+    }
+
+    #[test]
+    fn normalize_input_tags_dedupes_and_normalizes() {
+        let tags = normalize_input_tags(vec![
+            "#Tag1 tag1 标签2".to_string(),
+            "foo #foo".to_string(),
+        ])
+        .unwrap();
+        assert_eq!(
+            tags,
+            vec![
+                "tag1".to_string(),
+                "标签2".to_string(),
+                "foo".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn normalize_input_tags_rejects_invalid() {
+        assert!(normalize_input_tags(vec!["tag-1".to_string()]).is_err());
+    }
+
+    #[test]
+    fn refresh_prompts_hides_pending_empty_within_ttl() {
+        let dir = make_temp_dir("pending-hide");
+        let path = dir.join("empty.txt");
+        fs::write(&path, "").unwrap();
+        let state = make_state(&dir);
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis();
+        state
+            .pending_paths
+            .lock()
+            .unwrap()
+            .insert(path.to_string_lossy().to_string(), now);
+
+        let results = refresh_prompts(&state, &dir);
+        assert!(results.is_empty());
+    }
+
+    #[test]
+    fn refresh_prompts_shows_pending_empty_after_ttl() {
+        let dir = make_temp_dir("pending-show");
+        let path = dir.join("empty.txt");
+        fs::write(&path, "").unwrap();
+        let state = make_state(&dir);
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis();
+        let old = now.saturating_sub(PENDING_PROMPT_TTL_MS + 1);
+        state
+            .pending_paths
+            .lock()
+            .unwrap()
+            .insert(path.to_string_lossy().to_string(), old);
+
+        let results = refresh_prompts(&state, &dir);
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].path, path.to_string_lossy().to_string());
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
