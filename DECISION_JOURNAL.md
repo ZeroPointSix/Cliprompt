@@ -58,6 +58,10 @@
 - Built release bundles via `npm run tauri build` (msi and nsis outputs) with existing warnings about missing .svelte-kit/tsconfig.json and unused LogicalSize import.
 - Launched release app via prompt-launcher.exe for manual体验。
 
+### 2026-01-23 14:19
+- Build failed once due to prompt-launcher.exe being in use (os error 5); terminated running process and rebuilt successfully.
+- Rebuilt release bundles via `npm run tauri build` and relaunched prompt-launcher.exe for manual测试。
+
 ### 2026-01-22 22:12
 - ??: PRD ???????????????? TXT ?????????????????????????????????
 - ??:
