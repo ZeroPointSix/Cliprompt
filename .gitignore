@@ -1,0 +1,9 @@
+# 临时文件
+nul
+
+# 日志文件
+*.log
+prompt-launcher/*.log
+
+# Claude Code 配置(根据需要决定是否忽略)
+.claude/

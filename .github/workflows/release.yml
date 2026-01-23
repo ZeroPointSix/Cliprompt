@@ -1,0 +1,52 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install frontend dependencies
+        working-directory: ./prompt-launcher
+        run: npm ci
+
+      - name: Build Tauri app and create release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: ./prompt-launcher
+          tagName: v__VERSION__
+          releaseName: 'Cliprompt v__VERSION__'
+          releaseBody: |
+            ## 发布说明
+
+            ### 新增功能
+            - 查看 [提交历史](https://github.com/ZeroPointSix/Cliprompt/commits/main) 了解详情
+
+            ### 下载说明
+            - 下载 `.msi` 安装包进行安装
+
+            完整变更记录请查看 [提交历史](https://github.com/ZeroPointSix/Cliprompt/commits/main)。
+          releaseDraft: false
+          prerelease: false

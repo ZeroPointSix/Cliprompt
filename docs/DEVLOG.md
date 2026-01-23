@@ -1,0 +1,112 @@
+# Dev Log
+
+## 2026-01-21
+
+- 新增功能: 增加预览长度配置（10-200，默认 50）并在设置页提供输入框。
+- 新增功能: 调整预览长度后立即重算并更新列表中的预览内容。
+- 修复: 预览截断改为按字符计数，避免多字节字符截断风险。
+- 重要变更: 新增 `config.json` 字段 `preview_chars`，旧配置自动补默认值。
+- 修复: 设置页版本号改为读取应用版本，避免硬编码与发布版本不一致。
+- 重要变更: 版本号统一更新到 0.1.2（Tauri/Cargo/NPM）。
+- 测试/验证: `cargo test`（11 tests）。
+- 构建: `npm run tauri build`，生成 MSI/NSIS 安装包。
+
+## 2026-01-20
+
+- Fixed quick-create flow so the system editor is visible by hiding the launcher after opening the new file.
+- Added status messaging when the editor fails to open after file creation.
+- Added openPath fallback to Notepad and surfaced open errors in the status bar.
+- Added `opener:allow-open-path` capability to allow opening files with the system editor.
+- Added opener scope to allow opening user-selected prompt files.
+- Routed file opening through a backend command with prompts-dir path validation to bypass opener scope limits.
+- Fixed open_path type mismatch by converting PathBuf to String before calling the opener API.
+- Updated FD/TDD docs to cover `open_prompt_path` and path validation behavior.
+- Killed leftover Vite dev process on port 1420 to unblock `tauri dev`.
+- Ran `cargo test`; all tests passed (9 unit tests).
+- Added MSI upgrade code and disallowed downgrades to enable in-place upgrade installs.
+- Ran `npm run tauri build`; generated MSI and NSIS installers.
+- Updated PRD to include upgrade/uninstall and data retention requirements.
+- Updated TDD with manual upgrade verification steps.
+- Ran `npm run tauri dev`; app started successfully and was stopped after verification.
+- Ran `npm run check`; svelte-check reported 0 errors and 0 warnings.
+- Ran `npm run tauri dev`; app started successfully and was stopped after verification.
+- Ran `npm run tauri dev`; app started successfully and was stopped after verification.
+- Ran `npm run tauri dev`; app started successfully and was stopped after verification.
+- Ran `npm run tauri dev`; app started successfully and was stopped after verification.
+- Added metadata-backed tags stored in `.tags.json` with filename/folder fallback.
+- Implemented tag normalization rules (Chinese/ASCII alnum, length <= 10).
+- Added pending-file handling so new empty `.txt` entries appear after save.
+- Added Tauri commands for quick `.txt` creation and batch tag updates.
+- Added UI support for Ctrl multi-select, right-click tag add/remove, and tag suggestions.
+- Added a quick-create `+` button next to settings in the search bar.
+- Added FD and TDD documents for tags + quick-create.
+- Updated the PRD with tag management and quick-create requirements.
+- Ran `cargo test` in `prompt-launcher/src-tauri`; failed due to missing MSVC `link.exe`.
+- Ran `npm run tauri dev`; build failed due to missing MSVC `link.exe` and stopped the dev server.
+- Re-ran `cargo test` after toolchain install; all tests passed (9 unit tests).
+- Re-ran `cargo test`; all tests passed (9 unit tests).
+- Added `docs/DECISIONS.md` to capture design/optimization decisions.
+- Ran `cargo test` again; all tests passed (9 unit tests).
+- Fixed Svelte a11y warnings by switching result items to buttons and using pointerdown on overlays.
+- Ran `npm run dev`; frontend compiled without a11y warnings.
+- Ran `cargo test`; all tests passed (9 unit tests).
+- Ran `npm run tauri dev`; app started successfully and was stopped after verification.
+- Ran `cargo test` again; all tests passed (9 unit tests, no code changes).
+- Ran `npm run tauri dev` again; app started successfully and was stopped after verification.
+- Ran `cargo test` again; all tests passed (9 unit tests, no code changes).
+
+## 2026-01-15
+
+- Scaffolded Tauri v2 + SvelteKit project in `prompt-launcher`.
+- Implemented prompt indexing, file watching, and focus/paste flow in Rust.
+- Built the MVP UI with search, preview, folder picker, and hotkey settings.
+- Expanded search to include prompt bodies and added quick open for the prompts folder.
+- Added `docs/PLAN.md` to track iteration scope.
+- Added folder-name tags and seeded example prompts when the folder is empty.
+- Added a tray menu (show/hide/quit) with click-to-toggle behavior.
+- Added a start-with-Windows toggle backed by registry updates.
+- Moved fuzzy search scoring to Rust with a lightweight debounce on input.
+- Added UI feedback when auto-start registration fails.
+- Added a copy-only quick action in the preview panel.
+- Added a copy-title action for quick snippet reuse.
+- Added a compact settings drawer with hotkey guidance and status.
+- Added favorites toggles with a favorites-only filter.
+- Added a keyboard shortcut to favorite the active prompt.
+- Added a favorites count badge and active filter state.
+- Added a favorites section pinned to the top of the list.
+- Improved fuzzy ranking with term matching and word-boundary bias.
+- Added a filter mode chip in the header.
+- Added a copy-path action for prompt files.
+- Added a recent section and persisted recently used prompts.
+- Added recent filter, enable toggle, and clear action.
+- Added matched snippets in list rows when searching.
+- Added a Ctrl+Shift+R shortcut to clear recent history.
+- Added a Ctrl+Shift+E shortcut to toggle the recent filter.
+- Added a last-used timestamp in the preview panel.
+- Added a copy-snippet action in the preview panel.
+- Added a Ctrl+Shift+G shortcut to toggle favorites filter.
+- Highlighted matched terms in list snippets.
+- Made tag chips clickable to toggle #tag filters.
+- Highlighted matched terms inside the preview pane.
+- Applied the recent filter to search results.
+- Added a top-tags bar for quick #tag filtering.
+- Added a clear button to remove all #tag filters.
+- Added a scope toggle for top-tags (all vs results).
+- Persisted the top-tags scope toggle in config.
+- Added a shortcut to toggle the top-tags scope.
+- Added a reset button to clear the search query and tag filters.
+- Auto-switched top-tags scope when Favorites/Recent filters are active.
+- Added an auto indicator when top-tags scope is overridden by filters.
+- Allowed configuring how many top tags are shown.
+- Added a collapsible shortcuts legend under the search bar.
+- Added a copy-tags action in the preview pane.
+- Added a reset action that clears search, tags, and list filters.
+- Auto-expanded the shortcuts legend on first launch.
+- Fixed Tauri build issues on Windows (tray feature, watcher typing, Win32 imports).
+- Translated UI strings and seed prompts to Chinese.
+- Added the initial code review report to docs.
+- Replaced the settings drawer with a traditional settings page and moved shortcuts there.
+- Simplified the launcher UI to a lightweight search-first layout.
+- Prevented tray right-click from toggling the window.
+- Set tray menu labels to Chinese and updated the window title on launch.
+- Auto-shown the main window on startup in debug builds for verification.
