@@ -1394,6 +1394,9 @@
                                     {/if}
                                 </div>
                             </div>
+                            {#if hotkeyError}
+                                <div class="settings-error">{hotkeyError}</div>
+                            {/if}
                         </div>
 
                         <div class="settings-section">
@@ -1412,6 +1415,9 @@
                                     <span class="slider"></span>
                                 </label>
                              </div>
+                             {#if settingsError}
+                                 <div class="settings-error">{settingsError}</div>
+                             {/if}
                              <div class="setting-item">
                                 <span class="label">预览长度(字)</span>
                                 <div class="controls">
@@ -1979,6 +1985,12 @@
     margin-bottom: 8px;
     font-size: 13px;
     color: var(--text-color);
+}
+
+.settings-error {
+    font-size: 12px;
+    color: #b91c1c;
+    margin: 2px 0 8px 0;
 }
 
 .controls {
