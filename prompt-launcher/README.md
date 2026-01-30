@@ -15,6 +15,7 @@ Minimal Windows prompt manager that stays local, is file driven, and pastes into
 - Rust-side fuzzy ranking for large prompt sets
 - Dedicated settings page with hotkey guidance
 - Lightweight search-first launcher UI
+- Optional append clipboard content when sending
 - Favorites toggle shortcut: Ctrl+Shift+F
 - Favorites filter shortcut: Ctrl+Shift+G
 - Recent filter shortcut: Ctrl+Shift+E
@@ -30,6 +31,13 @@ Prereqs: Node.js, Rust toolchain, and the Tauri Windows prerequisites.
 ```
 npm install
 npm run tauri dev
+```
+
+## Tests
+
+```
+cd src-tauri
+cargo test
 ```
 
 ## Data model

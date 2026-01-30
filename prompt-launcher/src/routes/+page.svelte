@@ -3,11 +3,9 @@
   import { invoke } from "@tauri-apps/api/core";
   import { listen, type UnlistenFn } from "@tauri-apps/api/event";
   import { getVersion } from "@tauri-apps/api/app";
-  import { getCurrentWindow } from "@tauri-apps/api/window";
+  import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
   import { open as openDialog } from "@tauri-apps/plugin-dialog";
-  import { register, unregister } from "@tauri-apps/plugin-global-shortcut";
-  import { writeText } from "@tauri-apps/plugin-clipboard-manager";
-  import { registerHotkeySafely } from "../lib/hotkey-registration.js";
+  import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
 
   type PromptEntry = {
     id: string;
@@ -21,6 +19,7 @@
   type AppConfig = {
     prompts_dir: string;
     auto_paste: boolean;
+    append_clipboard: boolean;
     hotkey: string;
     auto_start: boolean;
     favorites: string[];
@@ -47,6 +46,7 @@
   let config = $state<AppConfig>({
     prompts_dir: "",
     auto_paste: true,
+    append_clipboard: false,
     hotkey: "Alt+Space",
     auto_start: false,
     favorites: [],
@@ -67,7 +67,6 @@
   let showShortcuts = $state<boolean>(false);
   let showFavorites = $state<boolean>(false);
   let showRecent = $state<boolean>(false);
-  let currentHotkey = "";
   let selectedIds = $state<Set<string>>(new Set());
   let contextMenu = $state<{ visible: boolean; x: number; y: number }>({
     visible: false,
@@ -97,11 +96,10 @@
 
   let unlistenPrompts: UnlistenFn | null = null;
   let unlistenFocus: UnlistenFn | null = null;
+  let unlistenLauncherShown: UnlistenFn | null = null;
   let windowClickHandler: ((event: MouseEvent) => void) | null = null;
   let windowJustShown = false;
   let focusLossTimer: ReturnType<typeof setTimeout> | null = null;
-  let lastToggleTime = 0;
-  let toggleDebounceMs = 300;
 
   // Derived state to determine if the dropdown area should be visible
   let hasContent = $derived(
@@ -184,21 +182,50 @@
 
   onMount(async () => {
     document.title = "提示词启动器";
-    config = await invoke<AppConfig>("get_config");
+    unlistenLauncherShown = await listen("launcher-shown", async () => {
+      windowJustShown = true;
+      await tick();
+      focusSearch();
+      setTimeout(() => {
+        windowJustShown = false;
+      }, 500);
+    });
+
+    await tick();
+    await invoke("frontend_ready").catch((error) => {
+      console.warn("[frontend_ready] Failed to notify backend", error);
+    });
+
+    try {
+      config = await invoke<AppConfig>("get_config");
+    } catch (error) {
+      status = formatError(error) || "读取配置失败";
+    }
     try {
       appVersion = await getVersion();
     } catch (error) {
       console.warn("[appVersion] Failed to load version", error);
     }
     hotkeyDraft = config.hotkey;
-    allPrompts = await invoke<PromptEntry[]>("list_prompts");
+    try {
+      allPrompts = await invoke<PromptEntry[]>("list_prompts");
+    } catch (error) {
+      status = formatError(error) || "提示词列表加载失败";
+    }
     if (config.show_shortcuts_hint) {
       showShortcuts = true;
-      await invoke("set_show_shortcuts_hint", { showShortcutsHint: false });
-      config = { ...config, show_shortcuts_hint: false };
+      try {
+        await invoke("set_show_shortcuts_hint", { showShortcutsHint: false });
+        config = { ...config, show_shortcuts_hint: false };
+      } catch (error) {
+        console.warn("[shortcutsHint] Failed to update hint flag", error);
+      }
     }
-    await registerHotkey(config.hotkey);
-    await refreshResults();
+    try {
+      await refreshResults();
+    } catch (error) {
+      status = formatError(error) || "搜索初始化失败";
+    }
 
     windowClickHandler = () => {
       closeContextMenu();
@@ -247,75 +274,13 @@
     if (unlistenFocus) {
       unlistenFocus();
     }
+    if (unlistenLauncherShown) {
+      unlistenLauncherShown();
+    }
     if (windowClickHandler) {
       window.removeEventListener("click", windowClickHandler);
     }
-    if (currentHotkey) {
-      await unregister(currentHotkey).catch(() => {});
-    }
   });
-
-  async function registerHotkey(hotkey: string) {
-    console.log("[registerHotkey] Attempting to register hotkey:", hotkey);
-    hotkeyError = "";
-    const previousHotkey = currentHotkey;
-    const result = await registerHotkeySafely({
-      currentHotkey,
-      nextHotkey: hotkey,
-      register,
-      unregister,
-      handler: toggleWindow
-    });
-    if (result.error) {
-      console.error("[registerHotkey] Failed to register hotkey:", result.error);
-      hotkeyError = `快捷键注册失败：${formatError(result.error)}`;
-      return;
-    }
-    currentHotkey = result.currentHotkey;
-    if (result.didUnregister && previousHotkey) {
-      console.log("[registerHotkey] Unregistered previous hotkey:", previousHotkey);
-    } else if (result.unregisterError && previousHotkey) {
-      console.warn(
-        "[registerHotkey] Failed to unregister previous hotkey:",
-        previousHotkey,
-        result.unregisterError
-      );
-    }
-    if (result.didRegister) {
-      console.log("[registerHotkey] Successfully registered hotkey:", hotkey);
-    }
-  }
-
-  async function toggleWindow() {
-    // Debounce to prevent multiple rapid toggles
-    const now = Date.now();
-    if (now - lastToggleTime < toggleDebounceMs) {
-      console.log("[toggleWindow] Debounced - ignoring rapid toggle");
-      return;
-    }
-    lastToggleTime = now;
-
-    const visible = await appWindow.isVisible();
-    console.log("[toggleWindow] Current visible state:", visible);
-
-    if (visible) {
-      console.log("[toggleWindow] Hiding window");
-      await appWindow.hide();
-      return;
-    }
-
-    console.log("[toggleWindow] Showing window");
-    await invoke("capture_active_window").catch(() => {});
-    windowJustShown = true;
-    await appWindow.show();
-    await appWindow.setFocus();
-    await tick();
-    focusSearch();
-    // Clear the flag after a short delay to allow normal focus loss handling
-    setTimeout(() => {
-      windowJustShown = false;
-    }, 500);
-  }
 
   function focusSearch() {
     if (searchInput) {
@@ -373,15 +338,16 @@
       hotkeyError = "快捷键不能为空";
       return;
     }
-    await registerHotkey(hotkeyDraft);
-    if (hotkeyError) {
+    hotkeyError = "";
+    try {
+      await invoke("set_hotkey", { hotkey: hotkeyDraft });
+      config = { ...config, hotkey: hotkeyDraft };
+      status = "快捷键已保存";
+      settingsError = "";
+    } catch (error) {
+      hotkeyError = `快捷键注册失败：${formatError(error)}`;
       status = hotkeyError;
-      return;
     }
-    await invoke("set_hotkey", { hotkey: hotkeyDraft });
-    config = { ...config, hotkey: hotkeyDraft };
-    status = "快捷键已保存";
-    settingsError = "";
   }
 
   function onHotkeyInputKeydown(event: KeyboardEvent) {
@@ -420,6 +386,12 @@
     const nextValue = !config.auto_paste;
     config = { ...config, auto_paste: nextValue };
     await invoke("set_auto_paste", { autoPaste: nextValue });
+  }
+
+  async function toggleAppendClipboard() {
+    const nextValue = !config.append_clipboard;
+    config = { ...config, append_clipboard: nextValue };
+    await invoke("set_append_clipboard", { appendClipboard: nextValue });
   }
 
   async function toggleAutoStart() {
@@ -537,9 +509,32 @@
     }
     console.log("[usePrompt] Using prompt:", prompt.title);
     try {
+      console.log("[usePrompt] append_clipboard:", config.append_clipboard);
+      let clipboardText = "";
+      if (config.append_clipboard) {
+        try {
+          clipboardText = await readText();
+          console.log(
+            "[usePrompt] Clipboard read length:",
+            clipboardText ? clipboardText.length : 0
+          );
+        } catch (error) {
+          console.warn("[usePrompt] Failed to read clipboard", error);
+        }
+      }
+      const trimmedClipboard = clipboardText.trim();
+      const output = trimmedClipboard
+        ? `${prompt.body}\n\n---\n\n${clipboardText}`
+        : prompt.body;
+      console.log(
+        "[usePrompt] Output length:",
+        output.length,
+        "Appended:",
+        Boolean(trimmedClipboard)
+      );
       await appWindow.hide();
       console.log("[usePrompt] Window hidden");
-      await writeText(prompt.body);
+      await writeText(output);
       console.log("[usePrompt] Text written to clipboard");
       await invoke("focus_last_window", { autoPaste: config.auto_paste });
       console.log("[usePrompt] Focused last window");
@@ -1405,6 +1400,13 @@
                                 <span class="label">自动粘贴</span>
                                 <label class="toggle-switch">
                                     <input type="checkbox" checked={config.auto_paste} onchange={toggleAutoPaste} />
+                                    <span class="slider"></span>
+                                </label>
+                             </div>
+                             <div class="setting-item">
+                                <span class="label">发送时追加剪贴板内容</span>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" checked={config.append_clipboard} onchange={toggleAppendClipboard} />
                                     <span class="slider"></span>
                                 </label>
                              </div>

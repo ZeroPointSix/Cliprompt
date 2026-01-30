@@ -1,5 +1,34 @@
 # Dev Log
 
+## 2026-01-30
+
+- 新增: 发送时追加剪贴板内容开关，开启后发送提示词会自动拼接剪贴板文本。
+- 新增: 设置页提供“发送时追加剪贴板内容”开关。
+- 重要变更: 新增配置字段 `append_clipboard`，默认关闭，旧配置自动补默认值。
+- 修复: Clipboard read 权限补齐，允许读取文本内容。
+- 文档: 新增剪贴板追加功能 PRD 与测试用例。
+- 版本: 0.1.5（同步 Tauri/Cargo/NPM 版本）。
+- Tests: `cargo test`（28 tests）。
+- Tests: `npm run check`（0 errors, 0 warnings）。
+- Build: `npm run tauri build`（MSI/NSIS 产物）。
+- Release: `gh release create v0.1.5`（https://github.com/ZeroPointSix/Cliprompt/releases/tag/v0.1.5）。
+
+## 2026-01-26
+
+- 重构: 将全局快捷键注册迁移到后端，新增 `LauncherGate` 控制 UI 就绪与唤起排队。
+- 重构: 后端触发 `launcher-shown` 事件，前端统一处理聚焦与“刚显示”保护。
+- 版本: 0.1.4（同步 Tauri/Cargo/NPM 版本）。
+- 修复: `svelte-check` 报错的 `LogicalSize` 未导入问题。
+- 移除: 前端安全注册工具与对应 Node 测试（热键逻辑改为后端持有）。
+- 文档: 新增开机自启动热键回归用例文档；更新 BUG 记录与 ADR。
+- Tests: `cargo test`（28 tests）。
+- Tests: `npm run check`（0 errors, 0 warnings）。
+- Dev: `npm run tauri dev` 启动成功后手动中断；日志显示热键冲突（HotKey already registered）。
+- 验证: 需要重启验证自启动场景，当前环境无法执行重启，已记录为待验证。
+- 验证: 再次执行 `npm run tauri dev`，仍提示热键冲突（HotKey already registered），因此无法在当前环境验证热键唤起。
+- Build: `npm run tauri build`（成功，MSI/NSIS 已生成；Vite 提示 `LogicalSize` unused）。
+- Release: `gh release create v0.1.4`（https://github.com/ZeroPointSix/Cliprompt/releases/tag/v0.1.4）。
+
 ## 2026-01-22
 
 - Updated hotkey registration to keep the previous hotkey on failure by registering the new hotkey before releasing the old one.
@@ -13,6 +42,13 @@
 
 ## 2026-01-23
 
+- 新增功能: 快捷键注册改为先注册新快捷键，再释放旧快捷键，避免注册失败后失去快捷键。
+- 修复: 快捷键注册失败时在设置页展示错误提示，并保留旧快捷键。
+- 重要变更: 快速创建提示词文件逻辑拆分为 domain/usecase/infrastructure，统一文件名校验。
+- 修复: 新建空提示词文件在 5 秒内保持隐藏，超时自动显示，避免永久隐藏。
+- 重要变更: 版本号更新到 0.1.3（Tauri/Cargo/NPM）。
+- 测试/验证: `cargo test`（24 tests），`node --test`（4 tests）。
+- 构建: `npm run tauri build`，生成 MSI/NSIS 安装包。
 - Build: `npm run build` (warned about unused `LogicalSize` import).
 - Tests: `node --test` (pass, 4 tests).
 - Dev: `npm run tauri dev` (Vite ready at http://localhost:1420/).

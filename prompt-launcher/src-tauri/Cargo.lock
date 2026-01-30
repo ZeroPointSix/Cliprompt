@@ -2964,7 +2964,7 @@ dependencies = [
 
 [[package]]
 name = "prompt-launcher"
-version = "0.1.2"
+version = "0.1.5"
 dependencies = [
  "notify",
  "serde",

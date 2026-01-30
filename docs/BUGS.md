@@ -1,5 +1,33 @@
 # Bug 记录
 
+## 2026-01-26 19:33:35
+
+### 现象
+- 开机自启动后，全局快捷键偶发无法唤起。
+- 即便唤起，窗口白屏/无焦点，无法搜索，需要点击设置才能激活。
+
+### 复现步骤
+1. 开启开机自启动并重启系统。
+2. 登录后不主动打开应用，直接按全局快捷键。
+3. 观察无法唤起或唤起后输入框无焦点/无法输入。
+
+### 影响范围
+- 自启动场景下快捷键与搜索不可用，影响主路径。
+
+### 初步原因
+- 全局快捷键注册依赖前端 `onMount`，启动阶段 IO/异常会阻断注册。
+- 窗口展示与聚焦逻辑与前端生命周期强耦合，UI 未就绪时会出现白屏/无焦点。
+- 唤起请求缺少“前端就绪”门控与显式的聚焦事件通知。
+
+### 解决方案
+- 将全局快捷键注册迁移到后端，并在后端持有生命周期控制。
+- 增加 UI readiness gate：前端 ready 前的唤起请求排队，ready 后再显示。
+- 后端在显示窗口后触发 `launcher-shown` 事件，前端统一负责输入框聚焦。
+- 增加生命周期单元测试与自启动热键手工用例。
+
+### 状态
+- 已修复，待验证（需重启验证自启动场景）。当前 `npm run tauri dev` 出现热键冲突（HotKey already registered），需先更换热键再验证：`prompt-launcher/src-tauri/src/lifecycle.rs`、`prompt-launcher/src-tauri/src/lib.rs`、`prompt-launcher/src/routes/+page.svelte`、`docs/test-cases/TC-startup-hotkey.md`、`prompt-launcher/README.md`。
+
 ## 2026-01-21 17:24:30
 
 ### 现象

@@ -8,6 +8,8 @@ use tauri::{path::BaseDirectory, AppHandle, Manager};
 pub struct AppConfig {
     pub prompts_dir: String,
     pub auto_paste: bool,
+    #[serde(default)]
+    pub append_clipboard: bool,
     pub hotkey: String,
     #[serde(default)]
     pub auto_start: bool,
@@ -34,6 +36,7 @@ impl Default for AppConfig {
         Self {
             prompts_dir: String::new(),
             auto_paste: true,
+            append_clipboard: false,
             hotkey: "Alt+Space".to_string(),
             auto_start: false,
             favorites: Vec::new(),

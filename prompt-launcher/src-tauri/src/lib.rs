@@ -1,6 +1,7 @@
 mod config;
 mod domain;
 mod infrastructure;
+mod lifecycle;
 mod prompts;
 mod tags_meta;
 mod usecase;
@@ -17,7 +18,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use std::time::Duration;
 use tauri::{
     menu::{Menu, MenuItem},
@@ -25,10 +26,12 @@ use tauri::{
     AppHandle, Manager, State,
 };
 use tauri::Emitter;
+use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 use tauri_plugin_opener::OpenerExt;
 
 use config::{load_or_init, save, AppConfig};
 use infrastructure::fs_prompt_file_repository::FsPromptFileRepository;
+use lifecycle::{GateDecision, LauncherGate};
 use prompts::{
     index_prompts, make_preview, normalize_tag, search_prompts as search_prompts_impl, PromptEntry,
 };
@@ -39,6 +42,7 @@ const PREVIEW_CHARS_MIN: u32 = 10;
 const PREVIEW_CHARS_MAX: u32 = 200;
 // Grace period to keep newly created empty prompts hidden until editors finish saving.
 const PENDING_PROMPT_TTL_MS: u128 = 5_000;
+const EVENT_LAUNCHER_SHOWN: &str = "launcher-shown";
 
 struct AppState {
     prompts: RwLock<Vec<PromptEntry>>,
@@ -46,6 +50,8 @@ struct AppState {
     watcher: Mutex<Option<RecommendedWatcher>>,
     last_active_hwnd: Mutex<Option<isize>>,
     pending_paths: Mutex<HashMap<String, u128>>,
+    registered_hotkey: Mutex<Option<String>>,
+    launcher_gate: Mutex<LauncherGate>,
 }
 
 #[derive(Serialize)]
@@ -62,6 +68,8 @@ impl AppState {
             watcher: Mutex::new(None),
             last_active_hwnd: Mutex::new(None),
             pending_paths: Mutex::new(HashMap::new()),
+            registered_hotkey: Mutex::new(None),
+            launcher_gate: Mutex::new(LauncherGate::new()),
         }
     }
 }
@@ -74,6 +82,15 @@ fn get_config(state: State<Arc<AppState>>) -> AppConfig {
 #[tauri::command]
 fn list_prompts(state: State<Arc<AppState>>) -> Vec<PromptEntry> {
     state.prompts.read().unwrap().clone()
+}
+
+#[tauri::command]
+fn frontend_ready(app: AppHandle, state: State<Arc<AppState>>) -> Result<(), String> {
+    let should_show = state.launcher_gate.lock().unwrap().set_ui_ready();
+    if should_show {
+        show_main_window(&app)?;
+    }
+    Ok(())
 }
 
 fn resolve_prompts_root(state: &AppState) -> Result<PathBuf, String> {
@@ -325,13 +342,32 @@ fn set_auto_paste(
 }
 
 #[tauri::command]
+fn set_append_clipboard(
+    app: AppHandle,
+    state: State<Arc<AppState>>,
+    append_clipboard: bool,
+) -> Result<(), String> {
+    let mut config = state.config.lock().unwrap();
+    config.append_clipboard = append_clipboard;
+    save(&app, &config)
+}
+
+#[tauri::command]
 fn set_hotkey(
     app: AppHandle,
     state: State<Arc<AppState>>,
     hotkey: String,
 ) -> Result<(), String> {
+    let trimmed = hotkey.trim();
+    if trimmed.is_empty() {
+        return Err("快捷键不能为空".to_string());
+    }
+    update_hotkey_registration(&app, state.inner(), trimmed)?;
     let mut config = state.config.lock().unwrap();
-    config.hotkey = hotkey;
+    if config.hotkey == trimmed {
+        return Ok(());
+    }
+    config.hotkey = trimmed.to_string();
     save(&app, &config)
 }
 
@@ -594,6 +630,67 @@ fn store_active_window(state: &Arc<AppState>) -> Result<(), String> {
     }
 }
 
+fn register_global_hotkey(
+    app: &AppHandle,
+    state: &Arc<AppState>,
+    hotkey: &str,
+) -> Result<(), String> {
+    let state_handle = state.clone();
+    app.global_shortcut()
+        .on_shortcut(hotkey, move |app_handle, _, event| {
+            if event.state == ShortcutState::Pressed {
+                let _ = request_toggle(app_handle, &state_handle);
+            }
+        })
+        .map_err(|e| format!("register hotkey failed: {e}"))
+}
+
+fn update_hotkey_registration(
+    app: &AppHandle,
+    state: &Arc<AppState>,
+    hotkey: &str,
+) -> Result<(), String> {
+    let current = state.registered_hotkey.lock().unwrap().clone();
+    if current.as_deref() == Some(hotkey) {
+        return Ok(());
+    }
+
+    register_global_hotkey(app, state, hotkey)?;
+
+    if let Some(previous) = current {
+        let _ = app.global_shortcut().unregister(previous.as_str());
+    }
+
+    *state.registered_hotkey.lock().unwrap() = Some(hotkey.to_string());
+    Ok(())
+}
+
+fn request_show(app: &AppHandle, state: &Arc<AppState>) -> Result<(), String> {
+    let should_show = state.launcher_gate.lock().unwrap().request_show();
+    if !should_show {
+        let _ = store_active_window(state);
+        return Ok(());
+    }
+    let _ = store_active_window(state);
+    show_main_window(app)
+}
+
+fn request_toggle(app: &AppHandle, state: &Arc<AppState>) -> Result<(), String> {
+    let decision = state
+        .launcher_gate
+        .lock()
+        .unwrap()
+        .allow_toggle(Instant::now());
+    match decision {
+        GateDecision::Debounced => Ok(()),
+        GateDecision::DeferShow => {
+            let _ = store_active_window(state);
+            Ok(())
+        }
+        GateDecision::Proceed => toggle_main_window(app, state),
+    }
+}
+
 fn main_window(app: &AppHandle) -> Result<tauri::WebviewWindow, String> {
     app.get_webview_window("main")
         .ok_or_else(|| "main window not found".to_string())
@@ -607,6 +704,7 @@ fn show_main_window(app: &AppHandle) -> Result<(), String> {
     window
         .set_focus()
         .map_err(|e| format!("focus window failed: {e}"))?;
+    let _ = window.emit(EVENT_LAUNCHER_SHOWN, ());
     Ok(())
 }
 
@@ -618,7 +716,7 @@ fn hide_main_window(app: &AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-fn toggle_main_window(app: &AppHandle) -> Result<(), String> {
+fn toggle_main_window(app: &AppHandle, state: &Arc<AppState>) -> Result<(), String> {
     let window = main_window(app)?;
     let visible = window
         .is_visible()
@@ -626,6 +724,7 @@ fn toggle_main_window(app: &AppHandle) -> Result<(), String> {
     if visible {
         hide_main_window(app)
     } else {
+        let _ = store_active_window(state);
         show_main_window(app)
     }
 }
@@ -650,8 +749,7 @@ fn init_tray(app: &tauri::App) -> Result<(), String> {
         .on_menu_event(|app, event| match event.id().as_ref() {
             "show" => {
                 let state = app.state::<Arc<AppState>>();
-                let _ = store_active_window(state.inner());
-                let _ = show_main_window(app);
+                let _ = request_show(app, state.inner());
             }
             "hide" => {
                 let _ = hide_main_window(app);
@@ -671,8 +769,7 @@ fn init_tray(app: &tauri::App) -> Result<(), String> {
                 if button == MouseButton::Left && button_state == MouseButtonState::Up {
                     let app = tray.app_handle();
                     let state = app.state::<Arc<AppState>>();
-                    let _ = store_active_window(state.inner());
-                    let _ = toggle_main_window(&app);
+                    let _ = request_toggle(&app, state.inner());
                 }
             }
         })
@@ -858,6 +955,7 @@ pub fn run() {
                     .and_then(|exe| autostart::set_auto_start(config.auto_start, &exe));
             }
 
+            let hotkey = config.hotkey.clone();
             let state = Arc::new(AppState::new(config));
             let prompts = index_prompts(&dir, preview_chars);
             {
@@ -866,18 +964,22 @@ pub fn run() {
             }
 
             app.manage(state.clone());
+            if let Err(error) = update_hotkey_registration(&handle, &state, &hotkey) {
+                eprintln!("[hotkey] register failed: {error}");
+            }
             init_tray(app)
                 .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
-            start_watcher(handle.clone(), state, dir)
+            start_watcher(handle.clone(), state.clone(), dir)
                 .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
             if cfg!(debug_assertions) {
-                let _ = show_main_window(&handle);
+                let _ = request_show(&handle, &state);
             }
 
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             get_config,
+            frontend_ready,
             list_prompts,
             search_prompts,
             set_prompts_dir,
@@ -885,6 +987,7 @@ pub fn run() {
             open_prompt_path,
             delete_prompt_files,
             set_auto_paste,
+            set_append_clipboard,
             set_hotkey,
             set_auto_start,
             toggle_favorite,
