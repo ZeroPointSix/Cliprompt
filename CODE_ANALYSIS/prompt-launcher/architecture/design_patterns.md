@@ -3,56 +3,61 @@
 ## Architectural Patterns
 
 ### Tauri desktop + SvelteKit SPA
-**Observation**: The frontend is built as a SvelteKit SPA packaged inside a Tauri desktop app.
+**Observation**: UI is a SvelteKit SPA bundled into a Tauri desktop shell; backend exposes native/FS capabilities via commands.
 **Location**:
-- prompt-launcher/svelte.config.js:1
-- prompt-launcher/svelte.config.js:10
-- prompt-launcher/src/routes/+layout.js:5
-**Impact**: Low - This is a common, suitable pattern for local desktop utilities.
-**Recommendation**: Document the boundary between UI and native services and keep the contract stable as the app grows.
+- `prompt-launcher/src/routes/+layout.js:1`
+- `prompt-launcher/src-tauri/src/lib.rs:932`
+**Impact**: Low - Suitable for a local desktop launcher.
+**Recommendation**: Keep the UI/native command contract explicit and stable as features grow.
 
-### Command/RPC pattern via Tauri invoke
-**Observation**: UI issues commands by string name and backend exposes them via Tauri command handlers.
+### Command/RPC via Tauri invoke
+**Observation**: Frontend calls backend commands by string names; backend exposes them via `invoke_handler`.
 **Location**:
-- prompt-launcher/src/routes/+page.svelte:156
-- prompt-launcher/src/routes/+page.svelte:916
-- prompt-launcher/src-tauri/src/lib.rs:472
-**Impact**: Medium - Stringly-typed commands can drift without compile-time checks.
-**Recommendation**: Introduce a typed frontend client module that wraps all command names and payload shapes.
+- `prompt-launcher/src/routes/+page.svelte:195`
+- `prompt-launcher/src/routes/+page.svelte:330`
+- `prompt-launcher/src-tauri/src/lib.rs:980`
+**Impact**: Medium - Stringly-typed contracts can drift without compile-time checks.
+**Recommendation**: Introduce a typed frontend client that centralizes command names/payloads.
 
-### Observer pattern for prompt updates
-**Observation**: Backend watches the prompts directory and emits an event that the UI subscribes to.
+### Pub/Sub eventing between backend and UI
+**Observation**: Backend emits events when prompts change; UI listens for updates.
 **Location**:
-- prompt-launcher/src-tauri/src/lib.rs:402
-- prompt-launcher/src/routes/+page.svelte:169
-**Impact**: Low - Provides reactive refresh behavior without polling.
-**Recommendation**: Centralize event names as constants to prevent mismatches across layers.
+- `prompt-launcher/src-tauri/src/lib.rs:830`
+- `prompt-launcher/src/routes/+page.svelte:235`
+**Impact**: Low - Clean event-driven refresh without polling.
+**Recommendation**: Centralize event names as constants to avoid mismatches.
 
-## Design Pattern Usage
-
-### Shared state (singleton-like) in backend
-**Observation**: AppState is a shared, process-wide state object stored in Tauri state.
+### Clean-architecture slice (Domain -> UseCase -> Infrastructure)
+**Observation**: Prompt file creation follows Domain (filename rules) -> UseCase -> Repository implementation.
 **Location**:
-- prompt-launcher/src-tauri/src/lib.rs:25
-**Impact**: Medium - Shared mutable state can become a coordination bottleneck as features grow.
-**Recommendation**: Split state into smaller domain services and expose them via command modules.
+- `prompt-launcher/src-tauri/src/domain/prompt_filename.rs:26`
+- `prompt-launcher/src-tauri/src/usecase/create_prompt_file.rs:5`
+- `prompt-launcher/src-tauri/src/infrastructure/fs_prompt_file_repository.rs:6`
+**Impact**: Low - Good separation for this feature.
+**Recommendation**: Use the same layering for other prompt-related operations if they grow.
 
-## Anti-Patterns / Smells
-
-### God component in the Svelte UI
-**Observation**: The main page contains state, side effects, data formatting, and rendering in one file.
+### Shared state (singleton-like) via Tauri State
+**Observation**: `AppState` is a process-wide mutable state accessed by all commands.
 **Location**:
-- prompt-launcher/src/routes/+page.svelte:42
-- prompt-launcher/src/routes/+page.svelte:156
-- prompt-launcher/src/routes/+page.svelte:941
-**Impact**: Medium - Reduced cohesion and harder testability or reuse of logic.
-**Recommendation**: Extract stores/services (state + IO) and split UI into smaller Svelte components.
+- `prompt-launcher/src-tauri/src/lib.rs:47`
+**Impact**: Medium - Central state can become a coordination hotspot as features increase.
+**Recommendation**: Split `AppState` into smaller services and inject where needed.
+
+## Anti-patterns / Smells
+
+### God component in UI
+**Observation**: The main Svelte page owns state, side effects, data shaping, and rendering.
+**Location**:
+- `prompt-launcher/src/routes/+page.svelte:1`
+- `prompt-launcher/src/routes/+page.svelte:1324`
+- `prompt-launcher/src/routes/+page.svelte:1578`
+**Impact**: Medium - Low cohesion and difficult testability/reuse.
+**Recommendation**: Extract stores/services and split view into smaller components.
 
 ### God module in backend composition root
-**Observation**: lib.rs includes app setup, window/tray control, file watching, and command handlers.
+**Observation**: `lib.rs` mixes app wiring with command handlers, IO, window management, and watchers.
 **Location**:
-- prompt-launcher/src-tauri/src/lib.rs:25
-- prompt-launcher/src-tauri/src/lib.rs:402
-- prompt-launcher/src-tauri/src/lib.rs:472
-**Impact**: Medium - Harder to evolve or test features in isolation.
-**Recommendation**: Move commands to a dedicated module and keep lib.rs focused on wiring.
+- `prompt-launcher/src-tauri/src/lib.rs:47`
+- `prompt-launcher/src-tauri/src/lib.rs:980`
+**Impact**: Medium - Increases coupling and slows refactoring.
+**Recommendation**: Move command handlers into a `commands` module and keep `lib.rs` as a wiring layer.

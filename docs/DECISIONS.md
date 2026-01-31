@@ -53,3 +53,36 @@
 - 背景：本地 feature1 与远端 main 历史不相关，直接合并被 Git 拒绝。
 - 选择：使用 `git merge --allow-unrelated-histories` 合并 `origin/main`。
 - 影响：成功引入 main 的 LICENSE 等变更，保留现有开发改动。
+
+## 2026-01-31 20:09:37
+
+### 决策 9：统一命令层/服务层分层并收敛契约入口
+- 背景：`lib.rs` 与 `+page.svelte` 责任过度集中，命令/事件名散落导致维护成本高。
+- 选择：后端引入 `commands/` + `services/` 分层，前端使用 `tauriClient` + `constants` 统一入口；prompts 相关逻辑统一通过 `PromptsService`。
+- 影响：`lib.rs` 仅保留 wiring；命令层无业务逻辑；前端调用与事件名集中管理，后续新增功能更可控。
+
+### 决策 10：前端配置与提示词状态统一进入 stores
+- 背景：页面内配置与提示词状态直接维护，导致 UI 层承担过多业务状态管理。
+- 选择：新增 `configStore` 与 `promptsStore`，由 store 负责数据读写与与后端交互，页面只消费 store 状态。
+- 影响：`+page.svelte` 逻辑收敛，状态更新路径一致，便于后续拆分组件与测试。
+
+## 2026-01-31 21:05:00
+
+### 决策 11：UI 组件样式与组件内聚
+- 背景：`+page.svelte` 样式与结构仍偏集中，组件拆分后样式散落影响维护。
+- 选择：将结果列表与设置面板样式迁移到对应组件内。
+- 影响：页面仅保留布局与基础样式，组件边界清晰，后续迭代更易定位。
+
+## 2026-01-31 21:40:00
+
+### 决策 12：提示词列表纯函数抽离并补齐单测
+- 背景：`+page.svelte` 仍包含可复用的纯逻辑，缺少单元测试保护。
+- 选择：抽离 `buildRecentList`/`buildTopTags`/`getTagSuggestions` 到 `promptList.js`，用 Node 单测覆盖关键行为。
+- 影响：页面逻辑进一步收敛，纯函数具备明确回归保护。
+
+## 2026-01-31 22:10:00
+
+### 决策 13：查询/标签过滤纯函数抽离
+- 背景：页面内标签过滤与查询判断逻辑集中，缺少复用与测试入口。
+- 选择：抽离 `normalizeTagToken`/`applyTagSuggestion`/`toggleTagFilter` 等到 `launcherFilters.js` 并补单测。
+- 影响：过滤逻辑独立可测，页面职责进一步收敛。

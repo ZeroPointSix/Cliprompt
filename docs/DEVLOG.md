@@ -1,5 +1,52 @@
 # Dev Log
 
+## 2026-01-31
+
+- 重构: 前端新增 `configStore` 与 `promptsStore`，页面改为通过 store 读写配置与提示词数据。
+- 调整: `+page.svelte` 移除直接 `invoke` 与配置赋值，统一走 store/tauriClient。
+- 文档: 更新 ADR 与质量治理测试用例，补充 UI store 拆分检查项。
+- 重构: 结果列表样式迁移到 `ResultsList.svelte`，设置样式内聚在 `SettingsPanel.svelte`，`+page.svelte` 样式收敛。
+- 文档: 更新 TDD 与 UI 样式内聚测试用例，补充 ADR 记录。
+- Tests: `cargo test`（28 tests）。
+- Tests: `npm run check`（0 errors, 0 warnings；样式调整后复跑）。
+- 验证: 执行 TC-quality-stability 的 `rg` 静态检查（invoke/event/command/style 位置符合预期）。
+- 重构: 抽离提示词列表/标签建议纯函数至 `promptList.js`，页面复用纯逻辑。
+- 测试: 新增 `promptList.test.js` Node 单测，补充 `test:unit` 脚本。
+- 计划: 追加架构治理续作迭代到 `docs/PLAN.md`。
+- 依赖: 增加 `@types/node` 以支持 Node 测试类型。
+- 修复: 移除 `vite.config.js` 中未使用的 `@ts-expect-error`。
+- Dev: `npm install`（added 61 packages）。
+- Tests: `npm run test:unit`（4 tests）。
+- Tests: `npm run check`（0 errors, 0 warnings）。
+- Tests: `npm run test:unit`（复跑通过）。
+- Tests: `npm run check`（0 errors, 0 warnings；复跑）。
+- 重构: 抽离查询/标签过滤逻辑到 `launcherFilters.js`，页面改为复用纯函数。
+- 测试: 新增 `launcherFilters.test.js` 单测用例。
+- Tests: `npm run test:unit`（11 tests）。
+- Tests: `npm run check`（0 errors, 0 warnings）。
+- Tests: `npm run test:unit`（复跑通过）。
+- Tests: `npm run check`（0 errors, 0 warnings；复跑）。
+- 计划: 追加 selection 与 tag editor 逻辑抽离迭代。
+- Build: `npm run build`（有提示：`LogicalSize` 未使用）。
+- Tests: `npm run test:unit`（11 tests；复跑）。
+- Tests: `npm run check`（0 errors, 0 warnings；复跑）。
+- Dev: `npm run tauri dev`（Vite ready，应用已启动，供手动查看）。
+- 版本: 同步前端与 Tauri 版本到 0.1.6（NPM/Cargo/Tauri）。
+- 调整: 前端初始化流程增加显式 try/catch 与配置回退。
+- Tests: `npm run check`（0 errors, 0 warnings；修复后复跑）。
+- Tests: `npm run test:unit`（11 tests；复跑）。
+- Tests: `npm run check`（0 errors, 0 warnings；复跑）。
+- Build: `npm run build`（有提示：`LogicalSize` 未使用）。
+- 修复: 添加 `appVersion` 加载失败的兜底逻辑（设为 "Unknown"）。
+- 验证: 代码审查问题修复验证通过（`npm run check` + `npm run test:unit` + `cargo test`）。
+- 文档: 新增 `docs/CODE_REVIEW_FIX.md` 记录问题分析与修复过程。
+- 版本: 同步前端与 Tauri 版本到 0.1.7（NPM/Cargo/Tauri）。
+- Tests: `npm run test:unit`（11 tests）。
+- Tests: `npm run check`（0 errors, 0 warnings）。
+- Tests: `cargo test`（28 tests）。
+- Build: `npm run tauri build`（生成 MSI/NSIS；Vite 提示 `LogicalSize` 未使用）。
+- Release: `gh release create v0.1.7`（https://github.com/ZeroPointSix/Cliprompt/releases/tag/v0.1.7）。
+
 ## 2026-01-30
 
 - 新增: 发送时追加剪贴板内容开关，开启后发送提示词会自动拼接剪贴板文本。

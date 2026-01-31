@@ -1,41 +1,26 @@
 <script lang="ts">
   import { onDestroy, onMount, tick } from "svelte";
-  import { invoke } from "@tauri-apps/api/core";
   import { listen, type UnlistenFn } from "@tauri-apps/api/event";
   import { getVersion } from "@tauri-apps/api/app";
   import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
   import { open as openDialog } from "@tauri-apps/plugin-dialog";
   import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
-
-  type PromptEntry = {
-    id: string;
-    title: string;
-    body: string;
-    preview: string;
-    tags: string[];
-    path: string;
-  };
-
-  type AppConfig = {
-    prompts_dir: string;
-    auto_paste: boolean;
-    append_clipboard: boolean;
-    hotkey: string;
-    auto_start: boolean;
-    favorites: string[];
-    recent_ids: string[];
-    recent_enabled: boolean;
-    recent_meta: Record<string, number>;
-    top_tags_use_results: boolean;
-    top_tags_limit: number;
-    show_shortcuts_hint: boolean;
-    preview_chars: number;
-  };
-
-  type RecentState = {
-    recent_ids: string[];
-    recent_meta: Record<string, number>;
-  };
+  import { EVENTS } from "$lib/constants";
+  import { tauriClient } from "$lib/tauriClient";
+  import { configStore } from "$lib/stores/configStore";
+  import { promptsStore } from "$lib/stores/promptsStore";
+  import { buildRecentList, buildTopTags, getTagSuggestions } from "$lib/promptList";
+  import {
+    applyTagSuggestion as buildTagSuggestion,
+    clearTagFilters as clearTagFiltersValue,
+    hasAnyFilters as hasAnyFiltersValue,
+    hasTagFilters as hasTagFiltersValue,
+    isTagActive as isTagActiveValue,
+    toggleTagFilter as toggleTagFilterValue
+  } from "$lib/launcherFilters";
+  import SettingsPanel from "$lib/components/SettingsPanel.svelte";
+  import ResultsList from "$lib/components/ResultsList.svelte";
+  import type { PromptEntry } from "$lib/types";
 
   const appWindow = getCurrentWindow();
   const maxResults = 8;
@@ -43,21 +28,7 @@
   let searchInput = $state<HTMLInputElement | null>(null);
   let query = $state<string>("");
   let appVersion = $state<string>("");
-  let config = $state<AppConfig>({
-    prompts_dir: "",
-    auto_paste: true,
-    append_clipboard: false,
-    hotkey: "Alt+Space",
-    auto_start: false,
-    favorites: [],
-    recent_ids: [],
-    recent_enabled: true,
-    recent_meta: {},
-    top_tags_use_results: false,
-    top_tags_limit: 8,
-    show_shortcuts_hint: true,
-    preview_chars: 50
-  });
+  let config = $configStore;
   let selectedIndex = $state<number>(0);
   let status = $state<string>("");
   let hotkeyDraft = $state<string>("");
@@ -83,7 +54,7 @@
   let compositionEndedAt = 0;
 
   let filtered = $state<PromptEntry[]>([]);
-  let allPrompts = $state<PromptEntry[]>([]);
+  let allPrompts = $derived($promptsStore);
   let allTags = $state<string[]>([]);
   let topTags = $state<{ tag: string; count: number }[]>([]);
   let topTagsScopeBeforeFilter = $state<boolean | null>(null);
@@ -182,7 +153,7 @@
 
   onMount(async () => {
     document.title = "提示词启动器";
-    unlistenLauncherShown = await listen("launcher-shown", async () => {
+    unlistenLauncherShown = await listen(EVENTS.LAUNCHER_SHOWN, async () => {
       windowJustShown = true;
       await tick();
       focusSearch();
@@ -192,31 +163,40 @@
     });
 
     await tick();
-    await invoke("frontend_ready").catch((error) => {
-      console.warn("[frontend_ready] Failed to notify backend", error);
-    });
-
     try {
-      config = await invoke<AppConfig>("get_config");
+      await tauriClient.frontendReady();
+    } catch (error) {
+      console.warn("[frontend_ready] Failed to notify backend", error);
+    }
+
+    let loadedConfig: typeof config | null = null;
+    try {
+      loadedConfig = await configStore.load();
     } catch (error) {
       status = formatError(error) || "读取配置失败";
+      loadedConfig = config;
     }
+    const effectiveConfig = loadedConfig ?? config;
+    // Initialize hotkeyDraft from loaded config or store default
+    hotkeyDraft = effectiveConfig.hotkey;
+
+    // Load app version with fallback
     try {
       appVersion = await getVersion();
     } catch (error) {
       console.warn("[appVersion] Failed to load version", error);
+      appVersion = "Unknown";
     }
-    hotkeyDraft = config.hotkey;
+
     try {
-      allPrompts = await invoke<PromptEntry[]>("list_prompts");
+      await promptsStore.loadAll();
     } catch (error) {
       status = formatError(error) || "提示词列表加载失败";
     }
-    if (config.show_shortcuts_hint) {
+    if (effectiveConfig.show_shortcuts_hint) {
       showShortcuts = true;
       try {
-        await invoke("set_show_shortcuts_hint", { showShortcutsHint: false });
-        config = { ...config, show_shortcuts_hint: false };
+        await configStore.setShowShortcutsHint(false);
       } catch (error) {
         console.warn("[shortcutsHint] Failed to update hint flag", error);
       }
@@ -232,11 +212,14 @@
     };
     window.addEventListener("click", windowClickHandler);
 
-    unlistenPrompts = await listen<PromptEntry[]>("prompts-updated", (event) => {
-      allPrompts = event.payload ?? [];
-      selectedIndex = 0;
-      void refreshResults();
-    });
+    unlistenPrompts = await listen<PromptEntry[]>(
+      EVENTS.PROMPTS_UPDATED,
+      (event) => {
+        promptsStore.setFromEvent(event.payload ?? []);
+        selectedIndex = 0;
+        void refreshResults();
+      }
+    );
 
     // Re-add focus listener with improved logic
     unlistenFocus = await appWindow.onFocusChanged(({ payload }) => {
@@ -308,7 +291,7 @@
   async function openPathWithFallback(path: string) {
     console.info("[openPromptPath] opening:", path);
     try {
-      await invoke("open_prompt_path", { path });
+      await tauriClient.openPromptPath(path);
       return { ok: true as const };
     } catch (error) {
       const message = formatError(error) || "未知错误";
@@ -327,8 +310,8 @@
       return;
     }
     const dir = Array.isArray(result) ? result[0] : result;
-    await invoke("set_prompts_dir", { path: dir });
-    config = { ...config, prompts_dir: dir };
+    await promptsStore.setPromptsDir(dir);
+    configStore.setPromptsDirSync(dir);
     status = "目录已更新";
     await refreshResults();
   }
@@ -340,8 +323,7 @@
     }
     hotkeyError = "";
     try {
-      await invoke("set_hotkey", { hotkey: hotkeyDraft });
-      config = { ...config, hotkey: hotkeyDraft };
+      await configStore.setHotkey(hotkeyDraft);
       status = "快捷键已保存";
       settingsError = "";
     } catch (error) {
@@ -384,24 +366,20 @@
 
   async function toggleAutoPaste() {
     const nextValue = !config.auto_paste;
-    config = { ...config, auto_paste: nextValue };
-    await invoke("set_auto_paste", { autoPaste: nextValue });
+    await configStore.setAutoPaste(nextValue);
   }
 
   async function toggleAppendClipboard() {
     const nextValue = !config.append_clipboard;
-    config = { ...config, append_clipboard: nextValue };
-    await invoke("set_append_clipboard", { appendClipboard: nextValue });
+    await configStore.setAppendClipboard(nextValue);
   }
 
   async function toggleAutoStart() {
     const nextValue = !config.auto_start;
-    config = { ...config, auto_start: nextValue };
     try {
-      await invoke("set_auto_start", { autoStart: nextValue });
+      await configStore.setAutoStart(nextValue);
       settingsError = "";
     } catch (error) {
-      config = { ...config, auto_start: !nextValue };
       settingsError = `自启设置失败：${error}`;
     }
   }
@@ -410,8 +388,7 @@
     if (!prompt) {
       return;
     }
-    const favorites = await invoke<string[]>("toggle_favorite", { id: prompt.id });
-    config = { ...config, favorites: favorites ?? [] };
+    await configStore.toggleFavorite(prompt.id);
     void refreshResults();
   }
 
@@ -424,20 +401,6 @@
 
   function isFavorite(prompt: PromptEntry) {
     return config.favorites.includes(prompt.id);
-  }
-
-  function buildRecentList(prompts: PromptEntry[], recentIds: string[]) {
-    const map = new Map(
-      prompts.map((prompt, index) => [prompt.id, { prompt, index }])
-    );
-    const results: { prompt: PromptEntry; index: number }[] = [];
-    for (const id of recentIds) {
-      const entry = map.get(id);
-      if (entry) {
-        results.push(entry);
-      }
-    }
-    return results;
   }
 
   function toggleFavoritesFilter() {
@@ -468,37 +431,20 @@
     if (!config.recent_enabled) {
       return;
     }
-    const recentState = await invoke<RecentState>("push_recent", { id: prompt.id });
-    config = {
-      ...config,
-      recent_ids: recentState?.recent_ids ?? [],
-      recent_meta: recentState?.recent_meta ?? {}
-    };
+    await configStore.pushRecent(prompt.id);
   }
 
   async function toggleRecentEnabled() {
     const nextValue = !config.recent_enabled;
-    config = { ...config, recent_enabled: nextValue };
-    await invoke("set_recent_enabled", { recentEnabled: nextValue });
+    await configStore.setRecentEnabled(nextValue);
     if (!nextValue) {
-      const recentState = await invoke<RecentState>("clear_recent");
-      config = {
-        ...config,
-        recent_ids: recentState?.recent_ids ?? [],
-        recent_meta: recentState?.recent_meta ?? {},
-        recent_enabled: nextValue
-      };
+      await configStore.clearRecent();
     }
     void refreshResults();
   }
 
   async function clearRecent() {
-    const recentState = await invoke<RecentState>("clear_recent");
-    config = {
-      ...config,
-      recent_ids: recentState?.recent_ids ?? [],
-      recent_meta: recentState?.recent_meta ?? {}
-    };
+    await configStore.clearRecent();
     void refreshResults();
   }
 
@@ -536,7 +482,7 @@
       console.log("[usePrompt] Window hidden");
       await writeText(output);
       console.log("[usePrompt] Text written to clipboard");
-      await invoke("focus_last_window", { autoPaste: config.auto_paste });
+      await tauriClient.focusLastWindow(config.auto_paste);
       console.log("[usePrompt] Focused last window");
       await markRecent(prompt);
       console.log("[usePrompt] Marked as recent");
@@ -638,9 +584,8 @@
     }
     const paths = selected.map((prompt) => prompt.path);
     try {
-      const updated = await invoke<PromptEntry[]>("delete_prompt_files", { paths });
-      allPrompts = updated ?? [];
-      config = await invoke<AppConfig>("get_config");
+      await promptsStore.deletePromptFiles(paths);
+      await configStore.load();
       selectedIds = new Set();
       selectedIndex = 0;
       status = "删除成功";
@@ -721,26 +666,8 @@
     contextTarget = null;
   }
 
-  function getTagSuggestions(value: string, tags: string[]) {
-    const parts = value.trim().split(/\s+/);
-    const last = parts[parts.length - 1] ?? "";
-    if (!last.startsWith("#")) {
-      return [];
-    }
-    const keyword = last.slice(1).toLowerCase();
-    return tags
-      .filter((tag) => tag.toLowerCase().startsWith(keyword))
-      .slice(0, 8);
-  }
-
   function applyTagSuggestion(tag: string) {
-    const parts = query.trim().split(/\s+/).filter(Boolean);
-    if (parts.length === 0) {
-      query = `#${tag}`;
-    } else {
-      parts[parts.length - 1] = `#${tag}`;
-      query = parts.join(" ").trim();
-    }
+    query = buildTagSuggestion(query, tag);
     selectedIndex = 0;
     scheduleSearch();
     focusSearch();
@@ -813,11 +740,7 @@
           status = "标签不能为空";
           return;
         }
-        await invoke<PromptEntry[]>("update_prompt_tags", {
-          paths,
-          add: tokens,
-          remove: []
-        });
+        await promptsStore.updatePromptTags(paths, tokens, []);
         status = "标签已添加";
       } else if (tagEditorMode === "remove") {
         const tokens = Array.from(removeTagSelection);
@@ -825,11 +748,7 @@
           status = "请选择要移除的标签";
           return;
         }
-        await invoke<PromptEntry[]>("update_prompt_tags", {
-          paths,
-          add: [],
-          remove: tokens
-        });
+        await promptsStore.updatePromptTags(paths, [], tokens);
         status = "标签已移除";
       }
       closeTagEditor();
@@ -846,7 +765,7 @@
       return;
     }
     try {
-      const path = await invoke<string>("create_prompt_file", { name: trimmed });
+      const path = await promptsStore.createPromptFile(trimmed);
       try {
         const result = await openPathWithFallback(path);
         if (result.ok) {
@@ -877,15 +796,13 @@
       typeof nextValue === "boolean"
         ? nextValue
         : !config.top_tags_use_results;
-    config = { ...config, top_tags_use_results: value };
-    await invoke("set_top_tags_scope", { useResults: value });
+    await configStore.setTopTagsScope(value);
     return value;
   }
 
   async function setTopTagsLimit(limit: number) {
     const value = Math.max(1, Math.min(20, Math.floor(limit)));
-    config = { ...config, top_tags_limit: value };
-    await invoke("set_top_tags_limit", { limit: value });
+    await configStore.setTopTagsLimit(value);
   }
 
   async function setPreviewChars(previewChars: number) {
@@ -893,8 +810,7 @@
     if (value === config.preview_chars) {
       return;
     }
-    config = { ...config, preview_chars: value };
-    await invoke("set_preview_chars", { previewChars: value });
+    await configStore.setPreviewChars(value);
     await refreshResults();
   }
 
@@ -938,24 +854,6 @@
     }
   }
 
-  function buildTopTags(prompts: PromptEntry[], limit: number) {
-    const counts = new Map<string, number>();
-    prompts.forEach((prompt) => {
-      prompt.tags?.forEach((tag) => {
-        counts.set(tag, (counts.get(tag) ?? 0) + 1);
-      });
-    });
-    return Array.from(counts.entries())
-      .sort((a, b) => {
-        if (b[1] !== a[1]) {
-          return b[1] - a[1];
-        }
-        return a[0].localeCompare(b[0]);
-      })
-      .slice(0, limit)
-      .map(([tag, count]) => ({ tag, count }));
-  }
-
   function getTagSource() {
     if (config.top_tags_use_results) {
       return filtered;
@@ -971,29 +869,16 @@
     return allPrompts;
   }
 
-  function normalizeTagToken(tag: string) {
-    return `#${tag.toLowerCase()}`;
-  }
-
   function hasTagFilters() {
-    return query
-      .split(/\\s+/)
-      .some((part) => part.startsWith("#") && part.length > 1);
-  }
-
-  function hasQuery() {
-    return query.trim().length > 0;
+    return hasTagFiltersValue(query);
   }
 
   function hasAnyFilters() {
-    return hasQuery() || showFavorites || showRecent;
+    return hasAnyFiltersValue({ query, showFavorites, showRecent });
   }
 
   function isTagActive(tag: string) {
-    const token = normalizeTagToken(tag);
-    return query
-      .split(/\\s+/)
-      .some((part) => part.toLowerCase() === token);
+    return isTagActiveValue(query, tag);
   }
 
   function resetAllFilters() {
@@ -1010,9 +895,7 @@
   }
 
   function clearTagFilters() {
-    const parts = query.split(/\\s+/).filter(Boolean);
-    const remaining = parts.filter((part) => !part.startsWith("#"));
-    query = remaining.join(" ").trim();
+    query = clearTagFiltersValue(query);
     selectedIndex = 0;
     status = "标签已清空";
     void refreshResults();
@@ -1020,12 +903,7 @@
   }
 
   function toggleTagFilter(tag: string) {
-    const token = normalizeTagToken(tag);
-    const parts = query.split(/\\s+/).filter(Boolean);
-    const hasTag = parts.some((part) => part.toLowerCase() === token);
-    const filtered = parts.filter((part) => part.toLowerCase() !== token);
-    const next = hasTag ? filtered : [...filtered, token];
-    query = next.join(" ").trim();
+    query = toggleTagFilterValue(query, tag);
     selectedIndex = 0;
     void refreshResults();
     focusSearch();
@@ -1290,11 +1168,11 @@
 
   async function refreshResults() {
     const token = ++searchToken;
-    const results = await invoke<PromptEntry[]>("search_prompts", {
+    const results = await promptsStore.searchPrompts(
       query,
-      limit: maxResults,
-      favoritesOnly: showFavorites
-    });
+      maxResults,
+      showFavorites
+    );
     if (token !== searchToken) {
       return;
     }
@@ -1361,138 +1239,33 @@
     {#if hasContent}
         <div class="results-dropdown">
             {#if showSettings}
-                <div class="settings-container">
-                    <div class="settings-header-mini">
-                        <span>设置</span>
-                        <span class="version">{appVersion ? `v${appVersion}` : "v--"}</span>
-                    </div>
-
-                    <div class="settings-scroll-area">
-                        <div class="settings-section">
-                            <div class="section-title">基础配置</div>
-                            <div class="setting-item">
-                                <span class="label">提示词目录</span>
-                                <div class="controls">
-                                    <div class="path-display" title={config.prompts_dir}>{config.prompts_dir || "未设置"}</div>
-                                    <button class="btn-sm" onclick={chooseFolder}>选择</button>
-                                </div>
-                            </div>
-                            <div class="setting-item">
-                                <span class="label">快捷键</span>
-                                <div class="controls controls-stack">
-                                    <div class="controls-row">
-                                        <input class="input-sm" bind:value={hotkeyDraft} onkeydown={onHotkeyInputKeydown} placeholder="按下组合键..." />
-                                        <button class="btn-sm" onclick={applyHotkey}>应用</button>
-                                    </div>
-                                    {#if hotkeyError}
-                                        <div class="setting-error">{hotkeyError}</div>
-                                    {/if}
-                                </div>
-                            </div>
-                            {#if hotkeyError}
-                                <div class="settings-error">{hotkeyError}</div>
-                            {/if}
-                        </div>
-
-                        <div class="settings-section">
-                             <div class="section-title">行为选项</div>
-                             <div class="setting-item">
-                                <span class="label">自动粘贴</span>
-                                <label class="toggle-switch">
-                                    <input type="checkbox" checked={config.auto_paste} onchange={toggleAutoPaste} />
-                                    <span class="slider"></span>
-                                </label>
-                             </div>
-                             <div class="setting-item">
-                                <span class="label">发送时追加剪贴板内容</span>
-                                <label class="toggle-switch">
-                                    <input type="checkbox" checked={config.append_clipboard} onchange={toggleAppendClipboard} />
-                                    <span class="slider"></span>
-                                </label>
-                             </div>
-                             <div class="setting-item">
-                                <span class="label">开机自启</span>
-                                <label class="toggle-switch">
-                                    <input type="checkbox" checked={config.auto_start} onchange={toggleAutoStart} />
-                                    <span class="slider"></span>
-                                </label>
-                             </div>
-                             {#if settingsError}
-                                 <div class="settings-error">{settingsError}</div>
-                             {/if}
-                             <div class="setting-item">
-                                <span class="label">预览长度(字)</span>
-                                <div class="controls">
-                                    <input
-                                        class="input-sm"
-                                        type="number"
-                                        min="10"
-                                        max="200"
-                                        step="1"
-                                        value={config.preview_chars}
-                                        onchange={onPreviewCharsChange}
-                                    />
-                                </div>
-                             </div>
-                        </div>
-                    </div>
-                </div>
+                <SettingsPanel
+                    {appVersion}
+                    {config}
+                    bind:hotkeyDraft
+                    {hotkeyError}
+                    {settingsError}
+                    onChooseFolder={chooseFolder}
+                    onHotkeyInputKeydown={onHotkeyInputKeydown}
+                    onApplyHotkey={applyHotkey}
+                    onToggleAutoPaste={toggleAutoPaste}
+                    onToggleAppendClipboard={toggleAppendClipboard}
+                    onToggleAutoStart={toggleAutoStart}
+                    onPreviewCharsChange={onPreviewCharsChange}
+                />
             {:else}
-                {#if tagSuggestions.length > 0}
-                    <div class="tag-suggestions">
-                        {#each tagSuggestions as tag}
-                            <button class="tag-suggestion" onclick={() => applyTagSuggestion(tag)}>
-                                #{tag}
-                            </button>
-                        {/each}
-                    </div>
-                {/if}
-                <div class="results-list">
-                    {#if filtered.length === 0}
-                         <div class="empty-state">
-                             <span class="empty-icon">🔍</span>
-                             <span>没有找到匹配的提示词</span>
-                         </div>
-                    {:else}
-                        {#each filtered as prompt, index (prompt.id)}
-                            <button
-                                class="result-item"
-                                class:selected={index === selectedIndex}
-                                class:multi-selected={selectedIds.has(prompt.id)}
-                                type="button"
-                                onclick={(event) => onResultClick(event, prompt, index)}
-                                oncontextmenu={(event) => onResultContextMenu(event, prompt, index)}
-                                onmouseenter={() => selectedIndex = index}
-                            >
-                                <div class="result-main">
-                                    <div class="result-title">
-                                        <span class="title-text">{prompt.title}</span>
-                                        {#if prompt.tags?.length}
-                                            <span class="tags-inline">
-                                                {#each prompt.tags as tag}
-                                                    <span class="tag-pill">#{tag}</span>
-                                                {/each}
-                                            </span>
-                                        {/if}
-                                    </div>
-                                    <div class="result-preview">{@html getRowPreviewHtml(prompt)}</div>
-                                </div>
-                            </button>
-                        {/each}
-                    {/if}
-                </div>
-
-                <div class="dropdown-footer">
-                    {#if status}
-                        <span class="status-msg">{status}</span>
-                    {:else}
-                        <span class="keys-hint">
-                            <span class="key">↵</span> 粘贴
-                            <span class="key">Esc</span> 返回
-                            <span class="key">Tab</span> 选择
-                        </span>
-                    {/if}
-                </div>
+                <ResultsList
+                    {tagSuggestions}
+                    onApplyTagSuggestion={applyTagSuggestion}
+                    {filtered}
+                    {selectedIndex}
+                    {selectedIds}
+                    {status}
+                    {getRowPreviewHtml}
+                    onResultClick={onResultClick}
+                    onResultContextMenu={onResultContextMenu}
+                    onResultHover={(index) => (selectedIndex = index)}
+                />
             {/if}
         </div>
     {/if}
@@ -1688,64 +1461,6 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
-.results-list {
-  max-height: 360px;
-  overflow-y: auto;
-  padding: 8px 0;
-}
-
-.result-item {
-  padding: 10px 16px;
-  cursor: pointer;
-  border-left: 3px solid transparent;
-  display: flex;
-  align-items: center;
-  background: transparent;
-  border: none;
-  width: 100%;
-  text-align: left;
-  font: inherit;
-}
-
-.result-item.selected {
-  background-color: var(--selected-bg);
-  border-left-color: var(--accent-color);
-}
-
-.result-main {
-  flex: 1;
-  overflow: hidden;
-}
-
-.result-title {
-  font-size: 16px;
-  font-weight: 500;
-  color: var(--text-color);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.title-text {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.tags-inline {
-  display: flex;
-  gap: 4px;
-  flex-wrap: wrap;
-}
-
-.tag-pill {
-  font-size: 11px;
-  background: #eef;
-  color: #44a;
-  padding: 1px 6px;
-  border-radius: 12px;
-}
-
 .add-btn {
   width: 34px;
   height: 34px;
@@ -1762,35 +1477,6 @@
 
 .add-btn:hover {
   background: #f3f5f9;
-}
-
-.tag-suggestions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  padding: 8px 16px 0 16px;
-  background: var(--bg-color);
-  border-left: 1px solid var(--border-color);
-  border-right: 1px solid var(--border-color);
-}
-
-.tag-suggestion {
-  border: 1px solid var(--border-color);
-  background: #ffffff;
-  color: #1f2a37;
-  border-radius: 999px;
-  padding: 4px 10px;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.tag-suggestion:hover {
-  background: #f3f5f9;
-}
-
-.result-item.multi-selected {
-  background: #e9f2ff;
-  border-color: #cfe2ff;
 }
 
 .context-menu {
@@ -1887,215 +1573,21 @@
   margin-top: 14px;
 }
 
-.btn-sm.ghost {
-  background: transparent;
-  border: 1px solid var(--border-color);
-}
-
-.result-preview {
-  font-size: 13px;
-  color: #666;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  margin-top: 2px;
-}
-
-:global(.result-preview mark) {
-  background: rgba(255, 230, 0, 0.4);
-  color: inherit;
-  padding: 0;
-}
-
-.empty-state {
-  padding: 30px;
-  text-align: center;
-  color: #888;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-}
-
-.empty-icon {
-  font-size: 24px;
-}
-
-.dropdown-footer {
-  padding: 8px 16px;
-  background: #fafafa;
-  border-top: 1px solid var(--border-color);
-  font-size: 12px;
-  color: #888;
-  display: flex;
-  justify-content: space-between;
-}
-
-.keys-hint {
-  display: flex;
-  gap: 12px;
-}
-
-.key {
-  background: #eee;
-  padding: 1px 5px;
-  border-radius: 3px;
-  font-family: monospace;
-  font-size: 11px;
-  margin-right: 2px;
-}
-
-/* Settings Styles */
-.settings-container {
-    padding: 16px;
-    height: 360px;
-    display: flex;
-    flex-direction: column;
-}
-
-.settings-header-mini {
-    font-size: 14px;
-    font-weight: bold;
-    color: #555;
-    margin-bottom: 12px;
-    display: flex;
-    justify-content: space-between;
-}
-
-.settings-scroll-area {
-    flex: 1;
-    overflow-y: auto;
-}
-
-.settings-section {
-    margin-bottom: 20px;
-}
-
-.section-title {
-    font-size: 12px;
-    color: var(--accent-color);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-bottom: 8px;
-    font-weight: 600;
-}
-
-.setting-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 8px;
-    font-size: 13px;
-    color: var(--text-color);
-}
-
-.settings-error {
-    font-size: 12px;
-    color: #b91c1c;
-    margin: 2px 0 8px 0;
-}
-
-.controls {
-    display: flex;
-    gap: 8px;
-    align-items: center;
-}
-
-.controls.controls-stack {
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 4px;
-}
-
-.controls-row {
-    display: flex;
-    gap: 8px;
-    align-items: center;
-}
-
-.setting-error {
-    font-size: 11px;
-    color: #b91c1c;
-    text-align: right;
-    max-width: 220px;
-}
-
-.path-display {
-    max-width: 150px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    color: #666;
-    font-size: 12px;
-    background: #f5f5f5;
-    padding: 2px 6px;
-    border-radius: 4px;
-}
-
 .btn-sm {
-    padding: 3px 8px;
-    font-size: 12px;
-    border: 1px solid #ddd;
-    background: white;
-    border-radius: 4px;
-    cursor: pointer;
+  padding: 3px 8px;
+  font-size: 12px;
+  border: 1px solid #ddd;
+  background: white;
+  border-radius: 4px;
+  cursor: pointer;
 }
 
 .btn-sm:hover {
-    background: #f0f0f0;
+  background: #f0f0f0;
 }
 
-.input-sm {
-    padding: 3px 6px;
-    font-size: 12px;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    width: 100px;
-}
-
-/* Toggle Switch */
-.toggle-switch {
-  position: relative;
-  display: inline-block;
-  width: 32px;
-  height: 18px;
-}
-
-.toggle-switch input {
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-
-.slider {
-  position: absolute;
-  cursor: pointer;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: #ccc;
-  transition: .4s;
-  border-radius: 34px;
-}
-
-.slider:before {
-  position: absolute;
-  content: "";
-  height: 14px;
-  width: 14px;
-  left: 2px;
-  bottom: 2px;
-  background-color: white;
-  transition: .4s;
-  border-radius: 50%;
-}
-
-input:checked + .slider {
-  background-color: var(--accent-color);
-}
-
-input:checked + .slider:before {
-  transform: translateX(14px);
+.btn-sm.ghost {
+  background: transparent;
+  border: 1px solid var(--border-color);
 }
 </style>

@@ -2,13 +2,13 @@
 
 ## Priority Recommendations
 
-### 1) Create a typed frontend command client
-**Observation**: Commands are invoked by string literals in the Svelte page.
+### 1) Add a typed frontend command client
+**Observation**: UI calls are scattered string literals.
 **Location**:
-- prompt-launcher/src/routes/+page.svelte:156
-- prompt-launcher/src/routes/+page.svelte:916
-**Impact**: Medium - Renaming commands risks runtime errors.
-**Recommendation**: Add a `src/lib/tauriClient.ts` that centralizes command names and payloads.
+- `prompt-launcher/src/routes/+page.svelte:195`
+- `prompt-launcher/src/routes/+page.svelte:330`
+**Impact**: Medium - High risk of contract drift.
+**Recommendation**: Create `prompt-launcher/src/lib/tauriClient.ts` and use it from components.
 
 Example:
 ```ts
@@ -23,26 +23,36 @@ export const tauriClient = {
 };
 ```
 
-### 2) Split +page.svelte into components and stores
-**Observation**: UI, state, and IO logic are all in one file.
+### 2) Split UI logic into stores/services + components
+**Observation**: `+page.svelte` concentrates UI, state, and IO.
 **Location**:
-- prompt-launcher/src/routes/+page.svelte:42
-- prompt-launcher/src/routes/+page.svelte:941
-**Impact**: Medium - Reduced cohesion and limited reuse.
-**Recommendation**: Extract a store for prompts and a separate component for settings/results lists.
+- `prompt-launcher/src/routes/+page.svelte:1`
+- `prompt-launcher/src/routes/+page.svelte:1324`
+**Impact**: Medium - Reduced cohesion and harder testing.
+**Recommendation**: Move query/prompt logic into Svelte stores and keep view files focused on layout.
 
-### 3) Introduce backend command modules
-**Observation**: lib.rs is both composition root and command implementation.
+### 3) Extract backend command handlers
+**Observation**: `lib.rs` mixes command implementations with app wiring and platform integrations.
 **Location**:
-- prompt-launcher/src-tauri/src/lib.rs:25
-- prompt-launcher/src-tauri/src/lib.rs:472
-**Impact**: Medium - Increases coupling as features grow.
-**Recommendation**: Move command functions into `src-tauri/src/commands/` and keep lib.rs for wiring.
+- `prompt-launcher/src-tauri/src/lib.rs:47`
+- `prompt-launcher/src-tauri/src/lib.rs:980`
+**Impact**: Medium - Increases coupling in the composition root.
+**Recommendation**: Create `prompt-launcher/src-tauri/src/commands/` and move command functions there.
 
-### 4) Centralize event names and command names
-**Observation**: Event names like `prompts-updated` are defined as string literals in multiple files.
+### 4) Normalize architecture around prompts
+**Observation**: Prompt creation uses a usecase pattern but indexing/search does not.
 **Location**:
-- prompt-launcher/src-tauri/src/lib.rs:402
-- prompt-launcher/src/routes/+page.svelte:169
-**Impact**: Medium - High risk of contract drift.
-**Recommendation**: Define constants for event names in the backend and mirror them in the frontend client.
+- `prompt-launcher/src-tauri/src/usecase/create_prompt_file.rs:5`
+- `prompt-launcher/src-tauri/src/prompts.rs:19`
+**Impact**: Medium - Inconsistent layering makes evolution harder.
+**Recommendation**: Introduce a `PromptsService` interface or fold the usecase into a simpler module strategy.
+
+## Secondary Recommendations
+
+### 5) Centralize event name constants
+**Observation**: Event strings are hard-coded in multiple files.
+**Location**:
+- `prompt-launcher/src-tauri/src/lib.rs:45`
+- `prompt-launcher/src/routes/+page.svelte:185`
+**Impact**: Low - Mismatches can cause silent failures.
+**Recommendation**: Define event names in a backend constants module and mirror them in the frontend client.

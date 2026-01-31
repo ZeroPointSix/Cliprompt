@@ -2,45 +2,50 @@
 
 ## Top-Level Layout
 
-### Two-module monorepo layout
-**Observation**: The repository has a frontend package and a Tauri Rust backend under one root.
+### Monorepo-style layout (frontend + tauri backend)
+**Observation**: UI and native backend live under `prompt-launcher/`, with SvelteKit in `src/` and Rust/Tauri in `src-tauri/`.
 **Location**:
-- prompt-launcher/package.json:1
-- prompt-launcher/src-tauri/Cargo.toml:1
-**Impact**: Low - Clear separation between UI and native code.
-**Recommendation**: Add a short architecture overview in docs to explain module boundaries and contracts.
+- `prompt-launcher/src/app.html:1`
+- `prompt-launcher/src-tauri/Cargo.toml:1`
+**Impact**: Low - Clear separation of technology stacks.
+**Recommendation**: Add a short architecture summary in docs to explain cross-boundary contracts.
 
 ## Backend Modules (prompt-launcher/src-tauri/src)
 
-### Composition root plus feature modules
-**Observation**: lib.rs wires together commands and OS integrations while feature modules handle specific concerns.
+### Composition root + feature modules
+**Observation**: `lib.rs` wires app setup and invokes modules for config, prompts, lifecycle, and OS integration.
 **Location**:
-- prompt-launcher/src-tauri/src/lib.rs:1
-- prompt-launcher/src-tauri/src/autostart.rs:9
-- prompt-launcher/src-tauri/src/config.rs:8
-- prompt-launcher/src-tauri/src/prompts.rs:17
-- prompt-launcher/src-tauri/src/win.rs:12
-**Impact**: Medium - lib.rs holds cross-cutting logic and can become a change hotspot.
-**Recommendation**: Move command handlers into a `commands` module and keep platform integrations isolated.
+- `prompt-launcher/src-tauri/src/lib.rs:47`
+- `prompt-launcher/src-tauri/src/lib.rs:932`
+**Impact**: Medium - `lib.rs` is a change hotspot.
+**Recommendation**: Split command handlers into a `commands` module to reduce churn in `lib.rs`.
+
+### Domain/usecase/infrastructure islands
+**Observation**: A small clean-architecture slice exists for file creation, but other prompt flows bypass it.
+**Location**:
+- `prompt-launcher/src-tauri/src/domain/prompt_filename.rs:26`
+- `prompt-launcher/src-tauri/src/usecase/create_prompt_file.rs:5`
+- `prompt-launcher/src-tauri/src/prompts.rs:19`
+**Impact**: Medium - Layering is inconsistent across features.
+**Recommendation**: Either expand the pattern across prompt operations or simplify by removing unused layers.
 
 ## Frontend Modules (prompt-launcher/src/routes)
 
-### Single-page UI with mixed responsibilities
-**Observation**: +page.svelte owns state, command calls, data shaping, and rendering.
+### Single-page UI module
+**Observation**: UI logic, state, and rendering are concentrated in `+page.svelte`.
 **Location**:
-- prompt-launcher/src/routes/+page.svelte:42
-- prompt-launcher/src/routes/+page.svelte:585
-- prompt-launcher/src/routes/+page.svelte:941
-**Impact**: Medium - Low cohesion inside the view layer and limited reuse.
-**Recommendation**: Split into view components and move behavior into stores/services.
+- `prompt-launcher/src/routes/+page.svelte:1`
+- `prompt-launcher/src/routes/+page.svelte:1324`
+**Impact**: Medium - Low cohesion and limited reuse of UI logic.
+**Recommendation**: Extract a `src/lib/stores/` or `src/lib/services/` layer and split UI components.
 
 ## Layering Strategy
 
-### Direct UI to backend command coupling
-**Observation**: The UI calls Tauri commands directly and embeds command names as strings.
+### Direct UI -> backend command coupling
+**Observation**: UI calls backend commands directly with string names and payloads.
 **Location**:
-- prompt-launcher/src/routes/+page.svelte:156
-- prompt-launcher/src/routes/+page.svelte:283
-- prompt-launcher/src/routes/+page.svelte:916
-**Impact**: Medium - Changing command names or payloads risks runtime breakage.
-**Recommendation**: Define a typed client module that centralizes command names and payloads.
+- `prompt-launcher/src/routes/+page.svelte:195`
+- `prompt-launcher/src/routes/+page.svelte:330`
+- `prompt-launcher/src-tauri/src/lib.rs:980`
+**Impact**: Medium - Contract changes are runtime-only failures.
+**Recommendation**: Introduce a typed command client module on the frontend.

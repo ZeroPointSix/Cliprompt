@@ -248,3 +248,29 @@
 
 - [x] Auto-show the main window on startup in debug builds for verification.
 - [x] Run `cargo check` after code updates.
+
+## Iteration 49 (Architecture baseline continuation)
+
+- [x] Extract prompt list utilities into `promptList.js` for UI reuse.
+- [x] Add Node unit tests for prompt list utilities.
+- [x] Run `npm run test:unit` and `npm run check` after code updates.
+
+## Iteration 50 (Filter helpers extraction)
+
+- [x] Extract query/tag filter helpers into `launcherFilters.js`.
+- [x] Add Node unit tests for filter helpers.
+- [x] Run `npm run test:unit` and `npm run check` after code updates.
+
+## Iteration 51 (Selection model extraction)
+
+- [ ] Extract selection helpers (`getSelectedPrompts`/`setSingleSelection`/`toggleSelection`) into `promptSelection.js`.
+- [ ] Update `+page.svelte` to use the selection helper module.
+- [ ] Add Node unit tests for selection helpers.
+- [ ] Run `npm run test:unit` and `npm run check` after code updates.
+
+## Iteration 52 (Tag editor helper extraction)
+
+- [ ] Extract tag editor helpers (tag input parsing, remove options aggregation) into `tagEditor.js`.
+- [ ] Update `+page.svelte` to use the tag editor helper module.
+- [ ] Add Node unit tests for tag editor helpers.
+- [ ] Run `npm run test:unit` and `npm run check` after code updates.
