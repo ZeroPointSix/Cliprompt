@@ -2,9 +2,6 @@ name: Release
 
 on:
   push:
-    branches:
-      - main
-      - master
     tags:
       - 'v*'
 
@@ -13,7 +10,13 @@ permissions:
 
 jobs:
   release:
-    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [ubuntu-latest, windows-latest]
+
+    runs-on: ${{ matrix.platform }}
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -21,10 +24,21 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
-      - name: Install Rust
+      - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './prompt-launcher/src-tauri -> target'
+
+      - name: Install dependencies (Ubuntu only)
+        if: matrix.platform == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
       - name: Install frontend dependencies
         working-directory: ./prompt-launcher
@@ -36,17 +50,26 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           projectPath: ./prompt-launcher
-          tagName: v__VERSION__
-          releaseName: 'Cliprompt v__VERSION__'
+          tagName: ${{ github.ref_name }}
+          releaseName: 'Cliprompt ${{ github.ref_name }}'
           releaseBody: |
-            ## 发布说明
+            ## 🎉 Release Notes
 
-            ### 新增功能
-            - 查看 [提交历史](https://github.com/ZeroPointSix/Cliprompt/commits/main) 了解详情
+            ### 📦 Downloads
 
-            ### 下载说明
-            - 下载 `.msi` 安装包进行安装
+            **Windows:**
+            - `prompt-launcher_x64_en-US.msi` - MSI installer (recommended)
+            - `prompt-launcher_x64-setup.exe` - NSIS installer
 
-            完整变更记录请查看 [提交历史](https://github.com/ZeroPointSix/Cliprompt/commits/main)。
+            **Linux:**
+            - `prompt-launcher_amd64.deb` - Debian/Ubuntu package
+            - `prompt-launcher.x86_64.rpm` - Fedora/RHEL package
+            - `prompt-launcher_amd64.AppImage` - Universal Linux executable
+
+            ### 📝 Changes
+            See [commit history](https://github.com/ZeroPointSix/Cliprompt/commits/${{ github.ref_name }}) for details.
+
+            ### 🐛 Bug Reports
+            Please report issues at https://github.com/ZeroPointSix/Cliprompt/issues
           releaseDraft: false
           prerelease: false

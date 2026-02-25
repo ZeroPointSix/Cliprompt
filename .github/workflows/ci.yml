@@ -87,3 +87,24 @@ jobs:
     - name: Build Tauri app
       working-directory: ./prompt-launcher
       run: npm run tauri build
+
+    - name: Upload artifacts (Windows)
+      if: matrix.platform == 'windows-latest'
+      uses: actions/upload-artifact@v4
+      with:
+        name: windows-artifacts
+        path: |
+          prompt-launcher/src-tauri/target/release/bundle/msi/*.msi
+          prompt-launcher/src-tauri/target/release/bundle/nsis/*-setup.exe
+        if-no-files-found: error
+
+    - name: Upload artifacts (Linux)
+      if: matrix.platform == 'ubuntu-latest'
+      uses: actions/upload-artifact@v4
+      with:
+        name: linux-artifacts
+        path: |
+          prompt-launcher/src-tauri/target/release/bundle/deb/*.deb
+          prompt-launcher/src-tauri/target/release/bundle/rpm/*.rpm
+          prompt-launcher/src-tauri/target/release/bundle/appimage/*.AppImage
+        if-no-files-found: error
