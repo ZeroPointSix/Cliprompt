@@ -1,0 +1,89 @@
+# CI workflow for Cliprompt - Tauri + SvelteKit application
+# Performs code checking, testing, and building
+
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  # Code quality checks and tests
+  check-and-test:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [22.x]
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+        cache-dependency-path: './prompt-launcher/package-lock.json'
+
+    - name: Install dependencies
+      working-directory: ./prompt-launcher
+      run: npm ci
+
+    - name: Run Svelte/TypeScript checks
+      working-directory: ./prompt-launcher
+      run: npm run check
+
+    - name: Run unit tests
+      working-directory: ./prompt-launcher
+      run: npm run test:unit
+
+    - name: Build frontend
+      working-directory: ./prompt-launcher
+      run: npm run build
+
+  # Build Tauri application
+  build-tauri:
+    runs-on: ${{ matrix.platform }}
+    needs: check-and-test
+
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [ubuntu-latest, windows-latest]
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 22
+        cache: 'npm'
+        cache-dependency-path: './prompt-launcher/package-lock.json'
+
+    - name: Install Rust stable
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Rust cache
+      uses: swatinem/rust-cache@v2
+      with:
+        workspaces: './prompt-launcher/src-tauri -> target'
+
+    - name: Install dependencies (Ubuntu only)
+      if: matrix.platform == 'ubuntu-latest'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+    - name: Install frontend dependencies
+      working-directory: ./prompt-launcher
+      run: npm ci
+
+    - name: Build Tauri app
+      working-directory: ./prompt-launcher
+      run: npm run tauri build

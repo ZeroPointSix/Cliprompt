@@ -1,0 +1,17 @@
+# CODEOWNERS file
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owner for everything in the repo
+* @ZeroPointSix
+
+# Frontend code
+/prompt-launcher/src/ @ZeroPointSix
+
+# Rust/Tauri backend
+/prompt-launcher/src-tauri/ @ZeroPointSix
+
+# GitHub workflows and configuration
+/.github/ @ZeroPointSix
+
+# Documentation
+*.md @ZeroPointSix
