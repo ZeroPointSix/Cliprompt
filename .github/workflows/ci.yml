@@ -90,7 +90,7 @@ jobs:
 
     - name: Upload artifacts (Windows)
       if: matrix.platform == 'windows-latest'
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: windows-artifacts
         path: |
@@ -100,7 +100,7 @@ jobs:
 
     - name: Upload artifacts (Linux)
       if: matrix.platform == 'ubuntu-latest'
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: linux-artifacts
         path: |
