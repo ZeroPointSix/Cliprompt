@@ -5,7 +5,9 @@ import { createLauncherReadyGate } from "./launcherReadyGate.js";
 const flushMicrotasks = () => Promise.resolve();
 
 test("does not notify the backend before the frontend is mounted", async () => {
+  /** @type {string[]} */
   const calls = [];
+  /** @type {Array<() => void>} */
   const scheduled = [];
   const gate = createLauncherReadyGate(
     async () => calls.push("frontend_ready"),
@@ -26,7 +28,9 @@ test("does not notify the backend before the frontend is mounted", async () => {
 });
 
 test("coalesces repeated ready requests into one backend notification", async () => {
+  /** @type {string[]} */
   const calls = [];
+  /** @type {Array<() => void>} */
   const scheduled = [];
   const gate = createLauncherReadyGate(
     async () => calls.push("frontend_ready"),
@@ -48,7 +52,9 @@ test("coalesces repeated ready requests into one backend notification", async ()
 });
 
 test("allows retry when the backend notification fails", async () => {
+  /** @type {unknown[]} */
   const errors = [];
+  /** @type {Array<() => void>} */
   const scheduled = [];
   let attempts = 0;
   const gate = createLauncherReadyGate(
