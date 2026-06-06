@@ -1,11 +1,25 @@
 import { invoke } from "@tauri-apps/api/core";
+import { createLauncherReadyGate } from "./launcherReadyGate.js";
 import type { AppConfig, PromptEntry, RecentState } from "./types";
+
+const launcherReadyGate = createLauncherReadyGate(
+  () => invoke("frontend_ready"),
+  (callback) => setTimeout(callback, 0),
+  (error) => console.warn("[frontend_ready] Failed to notify backend", error)
+);
 
 export const tauriClient = {
   getConfig: () => invoke<AppConfig>("get_config"),
   listPrompts: () => invoke<PromptEntry[]>("list_prompts"),
-  searchPrompts: (query: string, limit: number, favoritesOnly: boolean) =>
-    invoke<PromptEntry[]>("search_prompts", { query, limit, favoritesOnly }),
+  searchPrompts: async (query: string, limit: number, favoritesOnly: boolean) => {
+    const prompts = await invoke<PromptEntry[]>("search_prompts", {
+      query,
+      limit,
+      favoritesOnly
+    });
+    launcherReadyGate.scheduleAfterInitialData();
+    return prompts;
+  },
   setPromptsDir: (path: string) =>
     invoke<PromptEntry[]>("set_prompts_dir", { path }),
   createPromptFile: (name: string) =>
@@ -38,5 +52,7 @@ export const tauriClient = {
   captureActiveWindow: () => invoke("capture_active_window"),
   focusLastWindow: (autoPaste: boolean) =>
     invoke("focus_last_window", { autoPaste }),
-  frontendReady: () => invoke("frontend_ready")
+  frontendReady: async () => {
+    launcherReadyGate.markMounted();
+  }
 };
