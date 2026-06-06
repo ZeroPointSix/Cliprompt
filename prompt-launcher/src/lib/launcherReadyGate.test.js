@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createLauncherReadyGate } from "./launcherReadyGate.js";
 
-const flushMicrotasks = () => Promise.resolve();
+const flushAsyncHandlers = () => new Promise((resolve) => setImmediate(resolve));
 
 test("does not notify the backend before the frontend is mounted", async () => {
   /** @type {string[]} */
@@ -23,7 +23,7 @@ test("does not notify the backend before the frontend is mounted", async () => {
   assert.equal(scheduled.length, 1);
 
   scheduled[0]();
-  await flushMicrotasks();
+  await flushAsyncHandlers();
   assert.deepEqual(calls, ["frontend_ready"]);
 });
 
@@ -44,7 +44,7 @@ test("coalesces repeated ready requests into one backend notification", async ()
 
   assert.equal(scheduled.length, 1);
   scheduled[0]();
-  await flushMicrotasks();
+  await flushAsyncHandlers();
 
   gate.scheduleAfterInitialData();
   assert.equal(scheduled.length, 1);
@@ -71,7 +71,7 @@ test("allows retry when the backend notification fails", async () => {
   gate.markMounted();
   gate.scheduleAfterInitialData();
   scheduled[0]();
-  await flushMicrotasks();
+  await flushAsyncHandlers();
 
   assert.equal(attempts, 1);
   assert.equal(errors.length, 1);
@@ -79,7 +79,7 @@ test("allows retry when the backend notification fails", async () => {
   gate.scheduleAfterInitialData();
   assert.equal(scheduled.length, 2);
   scheduled[1]();
-  await flushMicrotasks();
+  await flushAsyncHandlers();
 
   assert.equal(attempts, 2);
   assert.equal(errors.length, 1);
