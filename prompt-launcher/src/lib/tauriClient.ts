@@ -1,11 +1,67 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { AppConfig, PromptEntry, RecentState } from "./types";
 
+let frontendReadyRequested = false;
+let frontendReadySent = false;
+let frontendReadyScheduled = false;
+
+function afterNextPaint(callback: () => void) {
+  if (
+    typeof window === "undefined" ||
+    typeof window.requestAnimationFrame !== "function"
+  ) {
+    callback();
+    return;
+  }
+
+  window.setTimeout(() => {
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(callback);
+    });
+  }, 0);
+}
+
+function flushFrontendReady() {
+  if (!frontendReadyRequested || frontendReadySent || frontendReadyScheduled) {
+    return;
+  }
+
+  frontendReadyScheduled = true;
+  afterNextPaint(() => {
+    frontendReadyScheduled = false;
+    if (!frontendReadyRequested || frontendReadySent) {
+      return;
+    }
+
+    frontendReadySent = true;
+    void invoke("frontend_ready").catch((error) => {
+      frontendReadySent = false;
+      console.warn("[frontend_ready] Failed to notify backend", error);
+    });
+  });
+}
+
+function scheduleFrontendReadyFallback() {
+  if (typeof window === "undefined") {
+    flushFrontendReady();
+    return;
+  }
+
+  window.setTimeout(() => {
+    flushFrontendReady();
+  }, 2000);
+}
+
 export const tauriClient = {
   getConfig: () => invoke<AppConfig>("get_config"),
   listPrompts: () => invoke<PromptEntry[]>("list_prompts"),
-  searchPrompts: (query: string, limit: number, favoritesOnly: boolean) =>
-    invoke<PromptEntry[]>("search_prompts", { query, limit, favoritesOnly }),
+  searchPrompts: async (query: string, limit: number, favoritesOnly: boolean) => {
+    try {
+      return await invoke<PromptEntry[]>("search_prompts", { query, limit, favoritesOnly });
+    } finally {
+      flushFrontendReady();
+    }
+  },
   setPromptsDir: (path: string) =>
     invoke<PromptEntry[]>("set_prompts_dir", { path }),
   createPromptFile: (name: string) =>
@@ -38,5 +94,9 @@ export const tauriClient = {
   captureActiveWindow: () => invoke("capture_active_window"),
   focusLastWindow: (autoPaste: boolean) =>
     invoke("focus_last_window", { autoPaste }),
-  frontendReady: () => invoke("frontend_ready")
+  frontendReady: () => {
+    frontendReadyRequested = true;
+    scheduleFrontendReadyFallback();
+    return Promise.resolve();
+  }
 };
