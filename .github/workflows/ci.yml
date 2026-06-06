@@ -29,7 +29,20 @@ jobs:
         cache: 'npm'
         cache-dependency-path: './prompt-launcher/package-lock.json'
 
-    - name: Install dependencies
+    - name: Install Rust stable
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Rust cache
+      uses: swatinem/rust-cache@v2
+      with:
+        workspaces: './prompt-launcher/src-tauri -> target'
+
+    - name: Install Tauri dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+    - name: Install frontend dependencies
       working-directory: ./prompt-launcher
       run: npm ci
 
@@ -37,9 +50,9 @@ jobs:
       working-directory: ./prompt-launcher
       run: npm run check
 
-    - name: Run unit tests
+    - name: Run all tests
       working-directory: ./prompt-launcher
-      run: npm run test:unit
+      run: npm run test
 
     - name: Build frontend
       working-directory: ./prompt-launcher
