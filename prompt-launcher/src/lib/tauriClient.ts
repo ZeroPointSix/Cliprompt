@@ -1,5 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
-import { createLauncherReadyGate } from "./launcherReadyGate.js";
+import {
+  createLauncherReadyGate,
+  notifyWhenInitialDataSettles
+} from "./launcherReadyGate.js";
 import type { AppConfig, PromptEntry, RecentState } from "./types";
 
 const launcherReadyGate = createLauncherReadyGate(
@@ -12,13 +15,14 @@ export const tauriClient = {
   getConfig: () => invoke<AppConfig>("get_config"),
   listPrompts: () => invoke<PromptEntry[]>("list_prompts"),
   searchPrompts: async (query: string, limit: number, favoritesOnly: boolean) => {
-    const prompts = await invoke<PromptEntry[]>("search_prompts", {
-      query,
-      limit,
-      favoritesOnly
-    });
-    launcherReadyGate.scheduleAfterInitialData();
-    return prompts;
+    return notifyWhenInitialDataSettles(
+      invoke<PromptEntry[]>("search_prompts", {
+        query,
+        limit,
+        favoritesOnly
+      }),
+      launcherReadyGate
+    );
   },
   setPromptsDir: (path: string) =>
     invoke<PromptEntry[]>("set_prompts_dir", { path }),

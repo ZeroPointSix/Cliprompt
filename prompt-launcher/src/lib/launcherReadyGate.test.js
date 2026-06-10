@@ -1,6 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createLauncherReadyGate } from "./launcherReadyGate.js";
+import {
+  createLauncherReadyGate,
+  notifyWhenInitialDataSettles
+} from "./launcherReadyGate.js";
 
 const flushAsyncHandlers = () => new Promise((resolve) => setImmediate(resolve));
 
@@ -83,4 +86,20 @@ test("allows retry when the backend notification fails", async () => {
 
   assert.equal(attempts, 2);
   assert.equal(errors.length, 1);
+});
+
+test("schedules readiness after initial data loading fails", async () => {
+  const searchError = new Error("search_prompts failed");
+  let scheduled = false;
+
+  await assert.rejects(
+    notifyWhenInitialDataSettles(Promise.reject(searchError), {
+      scheduleAfterInitialData: () => {
+        scheduled = true;
+      }
+    }),
+    searchError
+  );
+
+  assert.equal(scheduled, true);
 });

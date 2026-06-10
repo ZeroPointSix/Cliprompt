@@ -8,6 +8,11 @@
 
 ## Log
 
+### 2026-06-10 19:21 UTC
+- CodeXWeb claimed PR #43 review follow-up comment `4670504519` with claim comment `4673644135`.
+- Scope: keep the PR's mounted + initial data settled design, but make the initial prompt search failure path also release the hidden launcher window so users can see the existing error state.
+- Validation passed in remote sandbox: `npm ci --include=dev --no-audit --no-fund`, `npm run test:unit` (15 passed), `npm run check` (0 errors, 0 warnings), `npm run build`, and `git diff --check`.
+
 ### 2026-01-22 21:49
 - Checked required project guidance files in this worktree:
   - CLAUDE.md: missing

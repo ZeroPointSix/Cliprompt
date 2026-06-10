@@ -39,3 +39,20 @@ export function createLauncherReadyGate(
     }
   };
 }
+
+/**
+ * Treat the first prompt search as settled whether it succeeds or fails so the
+ * launcher can show either results or the existing error state.
+ *
+ * @template T
+ * @param {Promise<T>} initialDataPromise
+ * @param {{ scheduleAfterInitialData: () => void }} gate
+ * @returns {Promise<T>}
+ */
+export async function notifyWhenInitialDataSettles(initialDataPromise, gate) {
+  try {
+    return await initialDataPromise;
+  } finally {
+    gate.scheduleAfterInitialData();
+  }
+}
