@@ -75,3 +75,10 @@
 - ??: ?? 2?
 - ??: ?? 1???? PRD ?????????
 - ??: ??????????????????????? UI ????
+
+### 2026-06-10 21:21 UTC - CodeXWeb PR #44 review follow-up
+- Source: PR #44 review comment 4670502302; patrol claim comment 4674169808.
+- Scope: restored the final newline in prompt-launcher/package.json only, matching the maintainer review suggestion before merge.
+- Validation: npm ci passed; npm run check passed; Node unit tests passed 11/11; npm run build passed; git diff --check passed.
+- Rust/Tauri validation: attempted in the remote sandbox after installing Linux dependencies and stable Rust 1.96.0; cargo test could not complete because rustc was killed by SIGKILL while compiling glib even with --jobs 1 and reduced debug info.
+- Notes: no CI workflow logic changed; no auto-merge performed.
